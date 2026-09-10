@@ -18,7 +18,7 @@ function writeJson(filePath, value) {
 function createTempRepo({ version, changelog }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-changelog-"));
   writeJson(path.join(dir, "package.json"), {
-    name: "cc-plugin-codex",
+    name: "agy-plugin-codex",
     version,
   });
   fs.writeFileSync(path.join(dir, "CHANGELOG.md"), changelog, "utf8");

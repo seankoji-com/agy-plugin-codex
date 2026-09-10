@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, it } from "node:test";
@@ -12,10 +12,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  REVIEW_MCP_ALLOWED_TOOLS,
-  REVIEW_MCP_SERVER_NAME,
-  SANDBOX_STOP_REVIEW_TOOLS,
-} from "../scripts/lib/claude-cli.mjs";
+  getAgyAuthStatus,
+} from "../scripts/lib/agy-cli.mjs";
 
 const PROJECT_ROOT = path.resolve(
   fileURLToPath(new URL("../", import.meta.url))
@@ -39,90 +37,62 @@ const UNREAD_HOOK = path.join(
   "unread-result-hook.mjs"
 );
 const HOOKS_JSON = path.join(PROJECT_ROOT, "hooks", "hooks.json");
-const PLUGIN_CONFIG_BLOCK = '[plugins."cc@local-plugins"]\nenabled = true\n';
+const PLUGIN_CONFIG_BLOCK = '[plugins."agy@local-plugins"]\nenabled = true\n';
 
-function createFakeClaudeBinary(binDir) {
-  const claudePath = path.join(binDir, "claude");
+function createFakeAgyBinary(binDir) {
+  const agyPath = path.join(binDir, "agy");
   const source = `#!/usr/bin/env node
 const fs = require("node:fs");
 const args = process.argv.slice(2);
 
-if (process.env.CLAUDE_ARGS_FILE) {
-  fs.writeFileSync(process.env.CLAUDE_ARGS_FILE, JSON.stringify(args, null, 2) + "\\n", "utf8");
-}
-if (process.env.CLAUDE_MCP_CONFIG_FILE) {
-  const mcpConfigIndex = args.indexOf("--mcp-config");
-  if (mcpConfigIndex >= 0 && args[mcpConfigIndex + 1]) {
-    fs.copyFileSync(args[mcpConfigIndex + 1], process.env.CLAUDE_MCP_CONFIG_FILE);
-  }
+if (process.env.AGY_ARGS_FILE) {
+  fs.writeFileSync(process.env.AGY_ARGS_FILE, JSON.stringify(args, null, 2) + "\\n", "utf8");
 }
 
-  if (args[0] === "-p") {
-  if (process.env.CLAUDE_SILENT_FAIL === "1") {
+if (args[0] === "--version") {
+  process.stdout.write("1.1.28 (agylocal)\\n");
+  process.exit(0);
+}
+
+const outputFormatIndex = args.indexOf("--output-format");
+if (outputFormatIndex >= 0 && args[outputFormatIndex + 1] === "json") {
+  if (process.env.AGY_SILENT_FAIL === "1") {
+    process.stderr.write("agy failed: no credentials\\n");
     process.exit(7);
   }
-  if (process.env.CLAUDE_PREFIXED_ALLOW_RESULT === "1") {
+  if (process.env.AGY_PREFIXED_ALLOW_RESULT === "1") {
     process.stdout.write(JSON.stringify({
-      type: "stream_event",
-      session_id: "hook-session-result",
-      event: {
-        delta: {
-          type: "text_delta",
-          text: "Let me verify the actual code changes from that turn.ALLOW: hook ok"
-        }
-      }
-    }) + "\\n");
-    process.stdout.write(JSON.stringify({
-      type: "result",
-      session_id: "hook-session-result",
-      result: "ALLOW: hook ok"
+      conversation_id: "hook-session-result",
+      status: "SUCCESS",
+      response: "Let me verify the actual code changes from that turn.ALLOW: hook ok"
     }) + "\\n");
     process.exit(0);
   }
-  if (process.env.CLAUDE_UNEXPECTED_RESULT === "1") {
+  if (process.env.AGY_UNEXPECTED_RESULT === "1") {
     process.stdout.write(JSON.stringify({
-      type: "result",
-      session_id: "hook-session-result",
-      result: "MAYBE: hook unsure"
+      conversation_id: "hook-session-result",
+      status: "SUCCESS",
+      response: "MAYBE: hook unsure"
     }) + "\\n");
     process.exit(0);
   }
-  if (process.env.CLAUDE_UNKNOWN_NO_TERMINAL === "1") {
-    process.stdout.write(JSON.stringify({
-      type: "stream_event",
-      session_id: "hook-session-result",
-      event: {
-        delta: {
-          type: "text_delta",
-          text: "ALLOW: partial"
-        }
-      }
-    }) + "\\n");
+  if (process.env.AGY_RAW_NO_ENVELOPE === "1") {
+    process.stdout.write("ALLOW: partial\\n");
     process.exit(0);
   }
-  if (process.env.CLAUDE_LONG_BLOCK_RESULT === "1") {
+  if (process.env.AGY_LONG_BLOCK_RESULT === "1") {
     process.stdout.write(JSON.stringify({
-      type: "result",
-      session_id: "hook-session-result",
-      result: "BLOCK: " + "x".repeat(3000)
+      conversation_id: "hook-session-result",
+      status: "SUCCESS",
+      response: "BLOCK: " + "x".repeat(3000)
     }) + "\\n");
     process.exit(0);
   }
   process.stdout.write(JSON.stringify({
-    type: "result",
-    session_id: "hook-session-result",
-    result: "ALLOW: hook ok"
+    conversation_id: "hook-session-result",
+    status: "SUCCESS",
+    response: process.env.AGY_RESPONSE || "ALLOW: hook ok"
   }) + "\\n");
-  process.exit(0);
-}
-
-if (args[0] === "--version") {
-  process.stdout.write("2.1.90 (Claude Code)\\n");
-  process.exit(0);
-}
-
-if (args[0] === "auth" && args[1] === "status") {
-  process.stdout.write("authenticated\\n");
   process.exit(0);
 }
 
@@ -130,8 +100,8 @@ process.stderr.write("unexpected args: " + JSON.stringify(args) + "\\n");
 process.exit(2);
 `;
 
-  fs.writeFileSync(claudePath, source, "utf8");
-  fs.chmodSync(claudePath, 0o755);
+  fs.writeFileSync(agyPath, source, "utf8");
+  fs.chmodSync(agyPath, 0o755);
 }
 
 function runGitChecked(args, cwd) {
@@ -153,10 +123,10 @@ function initGitRepo(workspaceDir) {
 
 function createHookEnvironment(options = {}) {
   const {
-    createClaude = true,
+    createAgy = true,
     initGit = true,
   } = options;
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "claude-hooks-test-"));
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-hooks-test-"));
   const homeDir = path.join(rootDir, "home");
   const binDir = path.join(rootDir, "bin");
   const workspaceDir = path.join(rootDir, "workspace");
@@ -164,13 +134,20 @@ function createHookEnvironment(options = {}) {
   fs.mkdirSync(homeDir, { recursive: true });
   fs.mkdirSync(binDir, { recursive: true });
   fs.mkdirSync(workspaceDir, { recursive: true });
-  fs.mkdirSync(path.join(homeDir, ".codex", "plugins", "cache", "local-plugins", "cc", "local"), {
+  fs.mkdirSync(path.join(homeDir, ".codex", "plugins", "cache", "local-plugins", "agy", "local"), {
     recursive: true,
   });
   fs.mkdirSync(path.join(homeDir, ".codex"), { recursive: true });
   fs.writeFileSync(path.join(homeDir, ".codex", "config.toml"), PLUGIN_CONFIG_BLOCK, "utf8");
-  if (createClaude) {
-    createFakeClaudeBinary(binDir);
+  // agy auth state under ~/.gemini so the gate hook's auth check passes.
+  fs.mkdirSync(path.join(homeDir, ".gemini", "antigravity-cli"), { recursive: true });
+  fs.writeFileSync(
+    path.join(homeDir, ".gemini", "antigravity-cli", "settings.json"),
+    JSON.stringify({ account: "test@example.com" }, null, 2) + "\n",
+    "utf8"
+  );
+  if (createAgy) {
+    createFakeAgyBinary(binDir);
   }
   if (initGit) {
     initGitRepo(workspaceDir);
@@ -195,8 +172,8 @@ function installCachedPlugin(testEnv) {
     ".codex",
     "plugins",
     "cache",
-    "sendbird",
-    "cc",
+    "seankoji-com",
+    "agy",
     PROJECT_VERSION
   );
   fs.mkdirSync(pluginRoot, { recursive: true });
@@ -207,7 +184,7 @@ function installCachedPlugin(testEnv) {
   }
   fs.writeFileSync(
     path.join(testEnv.homeDir, ".codex", "config.toml"),
-    '[plugins."cc@sendbird"]\nenabled = true\n',
+    '[plugins."agy@seankoji-com"]\nenabled = true\n',
     "utf8"
   );
   return {
@@ -216,7 +193,7 @@ function installCachedPlugin(testEnv) {
       ".codex",
       "plugins",
       "data",
-      "cc-sendbird"
+      "agy-seankoji-com"
     ),
     stopHook: path.join(pluginRoot, "hooks", "stop-review-gate-hook.mjs"),
   };
@@ -233,7 +210,7 @@ function stateDirFor(homeDir, workspaceDir, pluginDataRoot = null) {
     .digest("hex")
     .slice(0, 12);
   return path.join(
-    pluginDataRoot ?? path.join(homeDir, ".codex", "plugins", "data", "cc"),
+    pluginDataRoot ?? path.join(homeDir, ".codex", "plugins", "data", "agy"),
     "state",
     workspaceHash
   );
@@ -340,7 +317,7 @@ describe("hooks", () => {
     }
   });
 
-  it("stop-review hook uses read-only sandbox and git MCP when review gate is enabled", () => {
+  it("stop-review hook invokes agy in read-only plan mode with the gate prompt", () => {
     const testEnv = createHookEnvironment();
 
     try {
@@ -352,8 +329,7 @@ describe("hooks", () => {
         "utf8"
       );
 
-      const argsFile = path.join(testEnv.rootDir, "claude-args.json");
-      const mcpConfigCaptureFile = path.join(testEnv.rootDir, "claude-mcp-config.json");
+      const argsFile = path.join(testEnv.rootDir, "agy-args.json");
       const result = runHook(
         STOP_HOOK,
         [],
@@ -363,8 +339,7 @@ describe("hooks", () => {
         },
         {
           ...testEnv.env,
-          CLAUDE_ARGS_FILE: argsFile,
-          CLAUDE_MCP_CONFIG_FILE: mcpConfigCaptureFile,
+          AGY_ARGS_FILE: argsFile,
         }
       );
 
@@ -372,40 +347,17 @@ describe("hooks", () => {
       assert.match(result.stderr, /turn-end review passed/i);
       const snapshot = readStopReviewSnapshot(testEnv);
       assert.equal(snapshot.status, "allow");
-      assert.equal(snapshot.claudeInvoked, true);
+      assert.equal(snapshot.agyInvoked, true);
       assert.equal(snapshot.sessionId, null);
       assert.equal(snapshot.hasLastAssistantMessage, true);
-      const claudeArgs = JSON.parse(fs.readFileSync(argsFile, "utf8"));
-      assert.equal(claudeArgs.includes("--model"), false);
-      assert.equal(claudeArgs.includes("--effort"), false);
-      const permissionModeIndex = claudeArgs.indexOf("--permission-mode");
-      assert.ok(permissionModeIndex >= 0);
-      assert.equal(claudeArgs[permissionModeIndex + 1], "dontAsk");
-      assert.ok(claudeArgs.includes("--settings"));
-      assert.ok(claudeArgs.includes("--mcp-config"));
-      assert.ok(claudeArgs.includes("--strict-mcp-config"));
-
-      const allowedTools = [];
-      for (let i = 0; i < claudeArgs.length; i++) {
-        if (claudeArgs[i] === "--allowedTools") {
-          allowedTools.push(claudeArgs[i + 1]);
-        }
-      }
-      assert.deepEqual(
-        allowedTools,
-        ["Read", "Glob", "Grep", ...REVIEW_MCP_ALLOWED_TOOLS],
-        "stop review must expose only read tools and the bundled read-only git MCP"
-      );
-
-      const mcpConfigIndex = claudeArgs.indexOf("--mcp-config");
-      const mcpConfigPath = claudeArgs[mcpConfigIndex + 1];
-      assert.equal(fs.existsSync(mcpConfigPath), false);
-      const capturedMcpConfig = JSON.parse(fs.readFileSync(mcpConfigCaptureFile, "utf8"));
-      const server = capturedMcpConfig.mcpServers[REVIEW_MCP_SERVER_NAME];
-      assert.ok(server);
-      assert.equal(
-        fs.realpathSync.native(server.env.CC_GIT_ROOT),
-        fs.realpathSync.native(testEnv.workspaceDir)
+      const agyArgs = JSON.parse(fs.readFileSync(argsFile, "utf8"));
+      assert.equal(agyArgs[agyArgs.indexOf("--model") + 1], "gemini-3.8-flash-medium");
+      assert.equal(agyArgs[agyArgs.indexOf("--output-format") + 1], "json");
+      assert.equal(agyArgs[agyArgs.indexOf("--mode") + 1], "plan");
+      assert.equal(agyArgs.at(-1).startsWith("-p="), true);
+      assert.ok(
+        !agyArgs.includes("--settings") && !agyArgs.includes("--mcp-config"),
+        "agy gate review must not pass sandbox settings or MCP config"
       );
     } finally {
       cleanupHookEnvironment(testEnv);
@@ -414,7 +366,7 @@ describe("hooks", () => {
 
   it("stop-review hook records a skipped snapshot when the review gate is disabled", () => {
     const testEnv = createHookEnvironment({
-      createClaude: false,
+      createAgy: false,
       initGit: false,
     });
 
@@ -435,7 +387,7 @@ describe("hooks", () => {
 
       const snapshot = readStopReviewSnapshot(testEnv);
       assert.equal(snapshot.status, "skipped_config_disabled");
-      assert.equal(snapshot.claudeInvoked, false);
+      assert.equal(snapshot.agyInvoked, false);
       assert.equal(snapshot.sessionId, "hook-session");
       assert.equal(snapshot.hasLastAssistantMessage, true);
       assert.match(snapshot.reason ?? "", /disabled/i);
@@ -447,7 +399,7 @@ describe("hooks", () => {
 
   it("writes cached marketplace hook state under Codex's injected PLUGIN_DATA root", () => {
     const testEnv = createHookEnvironment({
-      createClaude: false,
+      createAgy: false,
       initGit: false,
     });
 
@@ -488,7 +440,7 @@ describe("hooks", () => {
 
   it("ignores a PLUGIN_DATA root that does not match the installed marketplace", () => {
     const testEnv = createHookEnvironment({
-      createClaude: false,
+      createAgy: false,
       initGit: false,
     });
 
@@ -540,7 +492,7 @@ describe("hooks", () => {
       const fingerprint = getWorkingTreeFingerprint(testEnv.workspaceDir);
       writeTurnBaselineSnapshot(testEnv, "hook-session", fingerprint);
 
-      const argsFile = path.join(testEnv.rootDir, "claude-args.json");
+      const argsFile = path.join(testEnv.rootDir, "agy-args.json");
       const result = runHook(
         STOP_HOOK,
         [],
@@ -551,7 +503,7 @@ describe("hooks", () => {
         },
         {
           ...testEnv.env,
-          CLAUDE_ARGS_FILE: argsFile,
+          AGY_ARGS_FILE: argsFile,
         }
       );
 
@@ -561,7 +513,7 @@ describe("hooks", () => {
 
       const snapshot = readStopReviewSnapshot(testEnv);
       assert.equal(snapshot.status, "skipped_no_turn_edits");
-      assert.equal(snapshot.claudeInvoked, false);
+      assert.equal(snapshot.agyInvoked, false);
       assert.equal(
         snapshot.baselineFingerprint?.signature,
         snapshot.currentFingerprint?.signature
@@ -585,7 +537,7 @@ describe("hooks", () => {
 
       // No turn-baseline snapshot: UserPromptSubmit never ran for this session,
       // which is what a headless Codex thread driven by another host looks like.
-      const argsFile = path.join(testEnv.rootDir, "claude-args.json");
+      const argsFile = path.join(testEnv.rootDir, "agy-args.json");
       const result = runHook(
         STOP_HOOK,
         [],
@@ -596,7 +548,7 @@ describe("hooks", () => {
         },
         {
           ...testEnv.env,
-          CLAUDE_ARGS_FILE: argsFile,
+          AGY_ARGS_FILE: argsFile,
         }
       );
 
@@ -609,7 +561,7 @@ describe("hooks", () => {
 
       const snapshot = readStopReviewSnapshot(testEnv);
       assert.equal(snapshot.status, "skipped_no_turn_baseline");
-      assert.equal(snapshot.claudeInvoked, false);
+      assert.equal(snapshot.agyInvoked, false);
     } finally {
       cleanupHookEnvironment(testEnv);
     }
@@ -713,15 +665,15 @@ describe("hooks", () => {
         {
           ...testEnv.env,
           CLAUDE_ENV_FILE: envFile,
-          CLAUDE_COMPANION_SESSION_ID: "parent-session",
+          AGY_COMPANION_SESSION_ID: "parent-session",
         }
       );
 
       assert.equal(readCurrentSessionMarker(testEnv).sessionId, "parent-session");
 
       const exportedEnv = fs.readFileSync(envFile, "utf8");
-      assert.match(exportedEnv, /CLAUDE_COMPANION_SESSION_ID='child-session'/);
-      assert.match(exportedEnv, /CLAUDE_COMPANION_SKIP_INTERACTIVE_HOOKS='1'/);
+      assert.match(exportedEnv, /AGY_COMPANION_SESSION_ID='child-session'/);
+      assert.match(exportedEnv, /AGY_COMPANION_SKIP_INTERACTIVE_HOOKS='1'/);
     } finally {
       cleanupHookEnvironment(testEnv);
     }
@@ -732,7 +684,7 @@ describe("hooks", () => {
 
     try {
       const env = { ...testEnv.env, CLAUDECODE: "1" };
-      delete env.CLAUDE_COMPANION_SESSION_ID;
+      delete env.AGY_COMPANION_SESSION_ID;
       runHook(
         SESSION_HOOK,
         [],
@@ -752,7 +704,7 @@ describe("hooks", () => {
       const env = { ...testEnv.env };
       delete env.CLAUDECODE;
       delete env.CLAUDE_CODE_ENTRYPOINT;
-      delete env.CLAUDE_COMPANION_SESSION_ID;
+      delete env.AGY_COMPANION_SESSION_ID;
       runHook(
         SESSION_HOOK,
         [],
@@ -854,7 +806,7 @@ describe("hooks", () => {
     }
   });
 
-  it("stop-review hook blocks unknown Claude completion states even if partial output looks like ALLOW", () => {
+  it("stop-review hook blocks unknown agy completion states even if partial output looks like ALLOW", () => {
     const testEnv = createHookEnvironment();
 
     try {
@@ -877,21 +829,21 @@ describe("hooks", () => {
         },
         {
           ...testEnv.env,
-          CLAUDE_UNKNOWN_NO_TERMINAL: "1",
+          AGY_RAW_NO_ENVELOPE: "1",
         }
       );
 
       const payload = JSON.parse(result.stdout);
       assert.equal(payload.decision, "block");
-      assert.match(payload.reason ?? "", /No terminal result event received|unexpected answer|failed/i);
+      assert.match(payload.reason ?? "", /recognizable result envelope|unexpected answer|failed/i);
       const snapshot = readStopReviewSnapshot(testEnv);
       assert.equal(snapshot.status, "blocked");
-      assert.equal(snapshot.claudeInvoked, true);
-      assert.equal(snapshot.claudeStatus, "unknown");
-      assert.equal(snapshot.claudeExitCode, 0);
-      assert.match(snapshot.claudeWarning ?? "", /No terminal result event received/i);
-      assert.equal(snapshot.claudeStderr, "");
-      assert.equal(snapshot.claudeSessionId, "hook-session-result");
+      assert.equal(snapshot.agyInvoked, true);
+      assert.equal(snapshot.agyStatus, "unknown");
+      assert.equal(snapshot.agyExitCode, 0);
+      assert.match(snapshot.agyWarning ?? "", /recognizable result envelope/i);
+      assert.equal(snapshot.agyStderr, "");
+      assert.equal(snapshot.agyConversationId, null);
       assert.equal(typeof snapshot.promptBytes, "number");
       assert.ok(snapshot.promptBytes > 0);
     } finally {
@@ -899,7 +851,7 @@ describe("hooks", () => {
     }
   });
 
-  it("stop-review hook records silent non-zero Claude failures with exit context", () => {
+  it("stop-review hook records silent non-zero agy failures with exit context", () => {
     const testEnv = createHookEnvironment();
 
     try {
@@ -922,22 +874,22 @@ describe("hooks", () => {
         },
         {
           ...testEnv.env,
-          CLAUDE_SILENT_FAIL: "1",
+          AGY_SILENT_FAIL: "1",
         }
       );
 
       const payload = JSON.parse(result.stdout);
       assert.equal(payload.decision, "block");
-      assert.match(payload.reason ?? "", /turn-end Claude Code review failed/i);
+      assert.match(payload.reason ?? "", /turn-end Antigravity review failed/i);
 
       const snapshot = readStopReviewSnapshot(testEnv);
       assert.equal(snapshot.status, "blocked");
-      assert.equal(snapshot.claudeInvoked, true);
-      assert.equal(snapshot.claudeStatus, "failed");
-      assert.equal(snapshot.claudeExitCode, 7);
-      assert.equal(snapshot.claudeWarning, null);
-      assert.equal(snapshot.claudeStderr, "");
-      assert.equal(snapshot.claudeSessionId, null);
+      assert.equal(snapshot.agyInvoked, true);
+      assert.equal(snapshot.agyStatus, "failed");
+      assert.equal(snapshot.agyExitCode, 7);
+      assert.match(snapshot.agyWarning ?? "", /no credentials/i);
+      assert.match(snapshot.agyStderr ?? "", /no credentials/i);
+      assert.equal(snapshot.agyConversationId, null);
       assert.equal(typeof snapshot.lastAssistantMessageChars, "number");
       assert.ok(snapshot.lastAssistantMessageChars > 0);
       assert.equal(typeof snapshot.promptBytes, "number");
@@ -947,7 +899,7 @@ describe("hooks", () => {
     }
   });
 
-  it("stop-review hook records the raw Claude output for unexpected answers", () => {
+  it("stop-review hook records the raw agy output for unexpected answers", () => {
     const testEnv = createHookEnvironment();
 
     try {
@@ -970,7 +922,7 @@ describe("hooks", () => {
         },
         {
           ...testEnv.env,
-          CLAUDE_UNEXPECTED_RESULT: "1",
+          AGY_UNEXPECTED_RESULT: "1",
         }
       );
 
@@ -980,7 +932,7 @@ describe("hooks", () => {
 
       const snapshot = readStopReviewSnapshot(testEnv);
       assert.equal(snapshot.status, "blocked");
-      assert.equal(snapshot.claudeInvoked, true);
+      assert.equal(snapshot.agyInvoked, true);
       assert.equal(snapshot.firstLine, "MAYBE: hook unsure");
       assert.equal(snapshot.rawOutput, "MAYBE: hook unsure");
     } finally {
@@ -1011,7 +963,7 @@ describe("hooks", () => {
         },
         {
           ...testEnv.env,
-          CLAUDE_LONG_BLOCK_RESULT: "1",
+          AGY_LONG_BLOCK_RESULT: "1",
         }
       );
 
@@ -1055,7 +1007,7 @@ describe("hooks", () => {
         },
         {
           ...testEnv.env,
-          CLAUDE_PREFIXED_ALLOW_RESULT: "1",
+          AGY_PREFIXED_ALLOW_RESULT: "1",
         }
       );
 
@@ -1064,7 +1016,7 @@ describe("hooks", () => {
 
       const snapshot = readStopReviewSnapshot(testEnv);
       assert.equal(snapshot.status, "allow");
-      assert.equal(snapshot.claudeInvoked, true);
+      assert.equal(snapshot.agyInvoked, true);
       assert.equal(snapshot.firstLine, "ALLOW: hook ok");
       assert.match(snapshot.rawOutput, /^Let me verify the actual code changes/);
     } finally {
@@ -1124,7 +1076,7 @@ describe("hooks", () => {
         "utf8"
       );
 
-      const argsFile = path.join(testEnv.rootDir, "claude-args.json");
+      const argsFile = path.join(testEnv.rootDir, "agy-args.json");
       const result = runHook(
         STOP_HOOK,
         [],
@@ -1135,8 +1087,8 @@ describe("hooks", () => {
         },
         {
           ...testEnv.env,
-          CLAUDE_ARGS_FILE: argsFile,
-          CLAUDE_COMPANION_SKIP_INTERACTIVE_HOOKS: "1",
+          AGY_ARGS_FILE: argsFile,
+          AGY_COMPANION_SKIP_INTERACTIVE_HOOKS: "1",
         }
       );
 

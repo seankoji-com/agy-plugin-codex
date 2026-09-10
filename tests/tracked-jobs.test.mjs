@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, it, before, afterEach } from "node:test";
@@ -41,7 +41,7 @@ function createTempGitRepo() {
 
 describe("SESSION_ID_ENV", () => {
   it("is the expected environment variable name", () => {
-    assert.equal(SESSION_ID_ENV, "CLAUDE_COMPANION_SESSION_ID");
+    assert.equal(SESSION_ID_ENV, "AGY_COMPANION_SESSION_ID");
   });
 });
 

@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 import test from "node:test";
@@ -15,15 +15,15 @@ const PROJECT_ROOT = path.resolve(
   fileURLToPath(new URL("../", import.meta.url))
 );
 const HOOK_SCRIPT = path.join(PROJECT_ROOT, "hooks", "unread-result-hook.mjs");
-const PLUGIN_CONFIG_BLOCK = '[plugins."cc@local-plugins"]\nenabled = true\n';
+const PLUGIN_CONFIG_BLOCK = '[plugins."agy@local-plugins"]\nenabled = true\n';
 
 function createEnv() {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "claude-unread-hook-"));
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-unread-hook-"));
   const homeDir = path.join(rootDir, "home");
   const workspaceDir = path.join(rootDir, "workspace");
   fs.mkdirSync(homeDir, { recursive: true });
   fs.mkdirSync(workspaceDir, { recursive: true });
-  fs.mkdirSync(path.join(homeDir, ".codex", "plugins", "cache", "local-plugins", "cc", "local"), {
+  fs.mkdirSync(path.join(homeDir, ".codex", "plugins", "cache", "local-plugins", "agy", "local"), {
     recursive: true,
   });
   fs.mkdirSync(path.join(homeDir, ".codex"), { recursive: true });
@@ -60,7 +60,7 @@ function stateDirFor(testEnv) {
     ".codex",
     "plugins",
     "data",
-    "cc",
+    "agy",
     "state",
     workspaceHash
   );
@@ -151,7 +151,7 @@ test("injects one-shot context for same-session completed unread jobs and marks 
       prompt: "please continue with my next request",
     });
 
-    assert.match(output, /2 Claude Code background jobs/);
+    assert.match(output, /2 Antigravity background jobs/);
     assert.match(output, /task-a/);
     assert.match(output, /task-b/);
     assert.doesNotMatch(output, /task-c/);
@@ -248,7 +248,7 @@ test("does not self-clean managed hooks when the plugin stays enabled but the ca
       "utf8"
     );
     fs.rmSync(
-      path.join(testEnv.homeDir, ".codex", "plugins", "cache", "local-plugins", "cc", "local"),
+      path.join(testEnv.homeDir, ".codex", "plugins", "cache", "local-plugins", "agy", "local"),
       { recursive: true, force: true }
     );
 
@@ -298,7 +298,7 @@ test("does not self-clean managed hooks when config.toml is missing", () => {
     );
     fs.rmSync(path.join(testEnv.homeDir, ".codex", "config.toml"), { force: true });
     fs.rmSync(
-      path.join(testEnv.homeDir, ".codex", "plugins", "cache", "local-plugins", "cc", "local"),
+      path.join(testEnv.homeDir, ".codex", "plugins", "cache", "local-plugins", "agy", "local"),
       { recursive: true, force: true }
     );
 
@@ -352,7 +352,7 @@ test("does not self-clean managed hooks when config.toml is malformed", () => {
       "utf8"
     );
     fs.rmSync(
-      path.join(testEnv.homeDir, ".codex", "plugins", "cache", "local-plugins", "cc", "local"),
+      path.join(testEnv.homeDir, ".codex", "plugins", "cache", "local-plugins", "agy", "local"),
       { recursive: true, force: true }
     );
 
@@ -411,7 +411,7 @@ test("skips explicit status/result prompts and viewed jobs", () => {
       hook_event_name: "UserPromptSubmit",
       cwd: testEnv.workspaceDir,
       session_id: "session-a",
-      prompt: "$cc:status",
+      prompt: "$agy:status",
     });
     assert.equal(explicitOutput, "");
     assert.equal(readJob(testEnv, "task-b").notifiedAt, undefined);
@@ -440,7 +440,7 @@ test("skips unread-result announcements when nested-session hook suppression is 
         ...process.env,
         HOME: testEnv.homeDir,
         USERPROFILE: testEnv.homeDir,
-        CLAUDE_COMPANION_SKIP_INTERACTIVE_HOOKS: "1",
+        AGY_COMPANION_SKIP_INTERACTIVE_HOOKS: "1",
       },
       input: JSON.stringify({
         hook_event_name: "UserPromptSubmit",

@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, it, before, after, beforeEach, afterEach } from "node:test";
@@ -54,7 +54,7 @@ function installCachedStateModule(codexHome) {
     "plugins",
     "cache",
     "sendbird",
-    "cc",
+    "agy",
     PROJECT_VERSION
   );
   fs.mkdirSync(pluginRoot, { recursive: true });
@@ -209,7 +209,7 @@ describe("loadConfig / saveConfig", () => {
         codexHome,
         "plugins",
         "data",
-        "cc-sendbird",
+        "agy-sendbird",
         "state",
         workspaceHash
       );
@@ -269,7 +269,7 @@ describe("loadConfig / saveConfig", () => {
     const codexHome = path.join(homeDir, ".codex");
     const repoDir = createTempGitRepo();
     const legacyRoot = path.join(codexHome, "plugins", "data", "cc");
-    const expectedRoot = path.join(codexHome, "plugins", "data", "cc-sendbird");
+    const expectedRoot = path.join(codexHome, "plugins", "data", "agy-sendbird");
 
     try {
       const cachedStateModuleUrl = installCachedStateModule(codexHome);
