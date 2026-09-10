@@ -1,0 +1,20 @@
+{
+  "name": "seankoji-com",
+  "interface": {
+    "displayName": "Sean Koji Codex Plugins"
+  },
+  "plugins": [
+    {
+      "name": "agy",
+      "source": {
+        "source": "local",
+        "path": "."
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Coding"
+    }
+  ]
+}
