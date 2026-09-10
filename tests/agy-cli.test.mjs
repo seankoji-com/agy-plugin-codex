@@ -87,6 +87,12 @@ process.exit(2);
 `;
 }
 
+// The fake agy binary is exercised through spawn-based tests (runAgyTurn,
+// runAgyReview, runAgyAdversarialReview, cancelAgyProcess). On Windows the
+// fake is a bare shebang script that `spawn` cannot execute, so those describe
+// blocks are gated to POSIX (getAgyAvailability already encodes win32 as
+// unavailable). The pure CPU tests below (resolveAgyBin, buildAgyArgs, models,
+// effort, envelope parsing, constants) run on every platform.
 fs.writeFileSync(fakeBin, fakeAgySource(), "utf8");
 fs.chmodSync(fakeBin, 0o755);
 process.env.AGY_PLUGIN_CODEX_AGY_BIN = fakeBin;
@@ -529,6 +535,12 @@ describe("buildAgyArgs", () => {
 // ===========================================================================
 
 describe("runAgyTurn", () => {
+  // spawn of the fake shebang binary is not possible on Windows; see the
+  // module-level comment. The bridge is covered by Full CI on macOS/Ubuntu.
+  if (process.platform === "win32") {
+    it.skip("spawn-based turn execution (POSIX only)", () => {});
+    return;
+  }
   // Use a scratch cwd so the spawned fake runs somewhere harmless.
   const cwd = process.cwd();
 
@@ -635,6 +647,12 @@ describe("runAgyTurn", () => {
 // ===========================================================================
 
 describe("runAgyReview", () => {
+  // spawn of the fake shebang binary is not possible on Windows; see the
+  // module-level comment.
+  if (process.platform === "win32") {
+    it.skip("spawn-based review execution (POSIX only)", () => {});
+    return;
+  }
   it("defaults to plan mode and surfaces result/conversationId/serviceLimited", async () => {
     const argsFile = path.join(
       fs.mkdtempSync(path.join(os.tmpdir(), "agy-args-")),
@@ -656,6 +674,12 @@ describe("runAgyReview", () => {
 });
 
 describe("runAgyAdversarialReview", () => {
+  // spawn of the fake shebang binary is not possible on Windows; see the
+  // module-level comment.
+  if (process.platform === "win32") {
+    it.skip("spawn-based adversarial review execution (POSIX only)", () => {});
+    return;
+  }
   it("passes the json schema through buildAgyArgs", async () => {
     const argsFile = path.join(
       fs.mkdtempSync(path.join(os.tmpdir(), "agy-args-")),
