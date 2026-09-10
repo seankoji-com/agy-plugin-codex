@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
- * Session lifecycle hook for Codex — Claude Code bridge.
+ * Session lifecycle hook for Codex — Antigravity bridge.
  *
- * SessionStart: Exports CLAUDE_COMPANION_SESSION_ID via CLAUDE_ENV_FILE.
+ * SessionStart: Exports AGY_COMPANION_SESSION_ID via CLAUDE_ENV_FILE.
  * SessionEnd: Reaps dead background jobs and drops the session marker.
  *
- * No broker lifecycle — Claude Code uses direct CLI invocation.
+ * No broker lifecycle — agy uses direct CLI invocation (`agy -p`).
  */
 
 import fs from "node:fs";
@@ -30,8 +30,8 @@ import {
 import { SESSION_ID_ENV } from "../scripts/lib/tracked-jobs.mjs";
 
 export { SESSION_ID_ENV };
-const PLUGIN_DATA_ENV = "CLAUDE_PLUGIN_DATA";
-const SKIP_INTERACTIVE_HOOKS_ENV = "CLAUDE_COMPANION_SKIP_INTERACTIVE_HOOKS";
+const PLUGIN_DATA_ENV = "AGY_PLUGIN_DATA";
+const SKIP_INTERACTIVE_HOOKS_ENV = "AGY_COMPANION_SKIP_INTERACTIVE_HOOKS";
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function shellEscape(value) {

@@ -1,14 +1,14 @@
 ---
 name: result
-description: 'Show the stored final output for a finished Claude Code job in this repository. Args: [job-id]. Use when the user already has, or needs, a tracked job id.'
+description: 'Show the stored final output for a finished Antigravity job in this repository. Args: [job-id]. Use when the user already has, or needs, a tracked job id.'
 ---
 
-# Claude Code Result
+# Antigravity Result
 
-Use this skill when the user wants the stored final output for a finished Claude Code job.
+Use this skill when the user wants the stored final output for a finished Antigravity job.
 
 Resolve `<plugin-root>` as two directories above this `SKILL.md` file. Always run the companion from that active plugin root:
-`node "<plugin-root>/scripts/claude-companion.mjs" result $ARGUMENTS`
+`node "<plugin-root>/scripts/agy-companion.mjs" result $ARGUMENTS`
 
 Supported arguments: `[job-id]`
 

@@ -1,21 +1,20 @@
 {
-  "name": "cc-plugin-codex",
-  "version": "1.5.0",
-  "description": "Claude Code Plugin for Codex by Sendbird",
+  "name": "agy-plugin-codex",
+  "version": "2.0.0",
+  "description": "Antigravity (agy) Plugin for Codex — delegate reviews, audits, and rescue to Gemini via the Antigravity CLI",
   "type": "module",
   "author": {
-    "name": "Sendbird, Inc.",
-    "email": "jin.ku@sendbird.com",
-    "url": "https://sendbird.com/"
+    "name": "Sean Koji",
+    "url": "https://github.com/seankoji-com"
   },
-  "homepage": "https://github.com/sendbird/cc-plugin-codex",
+  "homepage": "https://github.com/seankoji-com/agy-plugin-codex",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sendbird/cc-plugin-codex.git"
+    "url": "git+https://github.com/seankoji-com/agy-plugin-codex.git"
   },
   "bin": "scripts/installer-cli.mjs",
   "bugs": {
-    "url": "https://github.com/sendbird/cc-plugin-codex/issues"
+    "url": "https://github.com/seankoji-com/agy-plugin-codex/issues"
   },
   "license": "Apache-2.0",
   "publishConfig": {
@@ -51,7 +50,7 @@
     "prepack": "npm run check:version-sync && npm run check:changelog",
     "setup:git-hooks": "node scripts/setup-git-hooks.mjs",
     "test": "node --test tests/*.test.mjs",
-    "test:cross-platform": "node --test tests/args.test.mjs tests/changelog.test.mjs tests/claude-cli.test.mjs tests/fs.test.mjs tests/prompts.test.mjs tests/render.test.mjs tests/sandbox-modes.test.mjs tests/skills-contracts.test.mjs tests/structured-output.test.mjs tests/version-sync.test.mjs",
+    "test:cross-platform": "node --test tests/args.test.mjs tests/changelog.test.mjs tests/agy-cli.test.mjs tests/fs.test.mjs tests/prompts.test.mjs tests/render.test.mjs tests/skills-contracts.test.mjs tests/structured-output.test.mjs tests/version-sync.test.mjs",
     "test:integration": "node --test tests/integration/*.test.mjs",
     "test:e2e": "node --test tests/e2e/*.test.mjs",
     "uninstall:codex": "node scripts/installer-cli.mjs uninstall",

@@ -1,3 +1,3 @@
 interface:
-  display_name: "Claude Code Adversarial Review"
-  short_description: "Args: --wait, --background, --base <ref>, --scope <auto|working-tree|branch>, --model <model>, [focus text]. Design-challenging review of local changes."
+  display_name: "Antigravity Adversarial Review"
+  short_description: "Args: --wait, --background, --base <ref>, --scope <auto|working-tree|branch>, --model <model>, --effort <low|medium|high>, [focus text]. Design-challenging review of local changes."

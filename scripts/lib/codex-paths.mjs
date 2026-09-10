@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 import fs from "node:fs";
@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const PLUGIN_DATA_NAMESPACE = "cc";
+export const PLUGIN_DATA_NAMESPACE = "agy";
 export const LEGACY_PLUGIN_DATA_NAMESPACES = ["cc", "claude-code"];
 
 const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -96,7 +96,7 @@ export function resolvePluginDataRoot(namespace) {
   }
 
   const injectedRoot =
-    process.env.PLUGIN_DATA?.trim() || process.env.CLAUDE_PLUGIN_DATA?.trim();
+    process.env.PLUGIN_DATA?.trim() || process.env.AGY_PLUGIN_DATA?.trim();
   if (injectedRoot) {
     const resolvedInjectedRoot = path.resolve(injectedRoot);
     const expectedRoot = resolveExpectedPluginDataRoot();

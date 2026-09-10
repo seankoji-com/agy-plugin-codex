@@ -1,17 +1,17 @@
-# Claude Code Review Runtime Reference
+# Antigravity Review Runtime Reference
 
-Use this document only when the main Codex thread or a built-in forwarding child is executing a Claude Code `review` or `adversarial-review` command.
+Use this document only when the main Codex thread or a built-in forwarding child is executing a Antigravity `review` or `adversarial-review` command.
 This is an internal runtime reference, not a public skill. It captures the exact companion-command contract and the foreground/background execution boundary.
 The public skill already resolved the active plugin root from its `SKILL.md` path. Reuse that path here. Do not derive a new runtime path from this document or the current working tree.
 
 Primary helper:
-- `node "<plugin-root>/scripts/claude-companion.mjs" review ...`
-- `node "<plugin-root>/scripts/claude-companion.mjs" adversarial-review ...`
+- `node "<plugin-root>/scripts/agy-companion.mjs" review ...`
+- `node "<plugin-root>/scripts/agy-companion.mjs" adversarial-review ...`
 
 Execution boundary:
 - Foreground review stays on the main Codex thread. Do not satisfy foreground review through a review subagent, a generic review-runner role, or any background worker abstraction.
 - Background review uses exactly one built-in forwarding child through `spawn_agent`.
-- Never satisfy either mode with raw `claude`, `claude-code`, `claude review`, hand-rolled `bash -lc ...claude...`, or detached companion shell backgrounding.
+- Never satisfy either mode with raw `agy` invocations, hand-rolled `bash -lc ...agy...`, or detached companion shell backgrounding.
 - If the resolved companion command fails, surface that failure instead of improvising a different executor.
 
 Foreground contract:
@@ -19,7 +19,7 @@ Foreground contract:
 - Foreground command:
   - `review --view-state on-success ...`
   - `adversarial-review --view-state on-success ...`
-- Run the companion command with `sandbox_permissions: "require_escalated"` and the justification `Allow the Claude Code companion to contact the Claude API for this requested review.` Do not first try the companion command in the default network-disabled sandbox.
+- Run the companion command with `sandbox_permissions: "require_escalated"` and the justification `Allow the Antigravity companion to contact the Antigravity API for this requested review.` Do not first try the companion command in the default network-disabled sandbox.
 - Return companion stdout faithfully and do not add review execution commentary around it.
 
 Background contract:
@@ -34,12 +34,12 @@ Background contract:
   - `adversarial-review --view-state defer ...`
 - The child must be a pure forwarder:
   - return stdout only
-  - ignore stderr progress chatter such as `[cc] ...`
+  - ignore stderr progress chatter such as `[agy] ...`
   - do not inspect the repo or perform the review itself
   - run the companion command as one blocking foreground shell-tool call, not as a background terminal/session
   - do not request a shell session id, poll a shell session later, or return before the companion command exits
   - if the available shell tool is `exec_command`, call it once in non-interactive mode and wait for command exit in that same call
-  - when using `exec_command`, pass `sandbox_permissions: "require_escalated"` and the justification `Allow the Claude Code companion to contact the Claude API for this requested review.` on that one call; do not first try the companion command in the default network-disabled sandbox
+  - when using `exec_command`, pass `sandbox_permissions: "require_escalated"` and the justification `Allow the Antigravity companion to contact the Antigravity API for this requested review.` on that one call; do not first try the companion command in the default network-disabled sandbox
   - use at most one `send_input` completion notification on success
   - mention the tool name `send_input` literally in the child instructions
   - use the exact tool shape `send_input({ target: <parent-thread-id>, message: <steering-message> })`
@@ -52,8 +52,8 @@ Spawn-agent defaults:
 
 Completion steering:
 - When a reserved review job id exists, steer to:
-  - `Background Claude Code review finished. Open it with $cc:result <reserved-job-id>.`
-  - `Background Claude Code adversarial review finished. Open it with $cc:result <reserved-job-id>.`
-- Otherwise steer to `$cc:status` first, then `$cc:result`.
+  - `Background Antigravity review finished. Open it with $agy:result <reserved-job-id>.`
+  - `Background Antigravity adversarial review finished. Open it with $agy:result <reserved-job-id>.`
+- Otherwise steer to `$agy:status` first, then `$agy:result`.
 - Use that same steering message as the child's own final assistant message for background mode.
 - Never inline raw review text in the notification or in the child's final assistant message for background mode.

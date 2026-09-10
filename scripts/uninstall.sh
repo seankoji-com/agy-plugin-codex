@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2026 Sendbird, Inc.
+# Copyright 2026 Sean Koji
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -16,7 +16,7 @@ require_cmd curl
 require_cmd tar
 require_cmd node
 
-REPO_TARBALL_URL="${CC_PLUGIN_CODEX_TARBALL_URL:-https://github.com/sendbird/cc-plugin-codex/archive/refs/heads/main.tar.gz}"
+REPO_TARBALL_URL="${AGY_PLUGIN_CODEX_TARBALL_URL:-https://github.com/seankoji-com/agy-plugin-codex/archive/refs/heads/main.tar.gz}"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 

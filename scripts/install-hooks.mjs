@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,7 +10,7 @@
  *
  * Native Codex plugin hooks are loaded from hooks/hooks.json in the plugin cache.
  * This script now only enables the required feature gates and removes stale
- * global hook entries from older cc-plugin-codex installs.
+ * global hook entries from older agy-plugin-codex installs.
  */
 
 import fs from "node:fs";

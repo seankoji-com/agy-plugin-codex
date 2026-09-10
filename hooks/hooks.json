@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "node \"$PLUGIN_ROOT/hooks/session-lifecycle-hook.mjs\"",
-            "statusMessage": "Initializing Claude Code bridge"
+            "statusMessage": "Initializing Antigravity bridge"
           }
         ]
       }
@@ -20,7 +20,7 @@
             "type": "command",
             "command": "node \"$PLUGIN_ROOT/hooks/session-lifecycle-hook.mjs\"",
             "timeout": 3,
-            "statusMessage": "Closing Claude Code bridge"
+            "statusMessage": "Closing Antigravity bridge"
           }
         ]
       }
@@ -43,7 +43,7 @@
           {
             "type": "command",
             "command": "node \"$PLUGIN_ROOT/hooks/unread-result-hook.mjs\"",
-            "statusMessage": "Checking for unread Claude Code results"
+            "statusMessage": "Checking for unread Antigravity results"
           }
         ]
       }

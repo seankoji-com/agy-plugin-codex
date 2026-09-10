@@ -1,12 +1,12 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 /**
  * State management — adapted for Codex plugin.
  * Key changes from original:
- * - Plugin-owned state under the cc plugin data namespace
- * - Legacy claude-code namespace migration
+ * - Plugin-owned state under the agy plugin data namespace
+ * - Legacy cc / claude-code namespace migration
  * - Workspace-hash isolation
  * - Config/job separation in filesystem
  * - CAS for job status transitions
