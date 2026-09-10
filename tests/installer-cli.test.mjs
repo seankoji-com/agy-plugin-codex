@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -79,7 +79,7 @@ function copyFixture(sourceRoot) {
 
 function copyMarketplaceFixture(sourceRoot, marketplaceName = "sendbird") {
   const marketplaceRoot = path.join(sourceRoot, "sendbird-marketplace");
-  const pluginRoot = path.join(marketplaceRoot, "plugins", "cc");
+  const pluginRoot = path.join(marketplaceRoot, "plugins", "agy");
   copyFixture(pluginRoot);
   fs.mkdirSync(path.join(marketplaceRoot, ".agents", "plugins"), { recursive: true });
   fs.writeFileSync(
@@ -90,10 +90,10 @@ function copyMarketplaceFixture(sourceRoot, marketplaceName = "sendbird") {
         interface: { displayName: "Sendbird Plugins" },
         plugins: [
           {
-            name: "cc",
+            name: "agy",
             source: {
               source: "local",
-              path: "./plugins/cc",
+              path: "./plugins/agy",
             },
             policy: {
               installation: "AVAILABLE",
@@ -309,8 +309,8 @@ rl.on("line", (line) => {
 
   return {
     env: {
-      CC_PLUGIN_CODEX_EXECUTABLE: process.execPath,
-      CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([scriptPath, codexHome, logPath]),
+      AGY_PLUGIN_CODEX_EXECUTABLE: process.execPath,
+      AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([scriptPath, codexHome, logPath]),
     },
     logPath,
   };
@@ -499,7 +499,7 @@ rl.on("line", (line) => {
 
   return {
     env: {
-      CC_PLUGIN_CODEX_EXECUTABLE: scriptPath,
+      AGY_PLUGIN_CODEX_EXECUTABLE: scriptPath,
     },
     logPath,
   };
@@ -548,8 +548,8 @@ rl.on("line", (line) => {
 
   return {
     env: {
-      CC_PLUGIN_CODEX_EXECUTABLE: process.execPath,
-      CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([scriptPath, codexHome, logPath]),
+      AGY_PLUGIN_CODEX_EXECUTABLE: process.execPath,
+      AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([scriptPath, codexHome, logPath]),
     },
     logPath,
   };
@@ -592,9 +592,9 @@ rl.on("line", (line) => {
 
   return {
     env: {
-      CC_PLUGIN_CODEX_EXECUTABLE: process.execPath,
-      CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([scriptPath, codexHome, logPath]),
-      CC_PLUGIN_CODEX_APP_SERVER_TIMEOUT_MS: "100",
+      AGY_PLUGIN_CODEX_EXECUTABLE: process.execPath,
+      AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([scriptPath, codexHome, logPath]),
+      AGY_PLUGIN_CODEX_APP_SERVER_TIMEOUT_MS: "100",
     },
     logPath,
   };
@@ -748,8 +748,8 @@ rl.on("line", (line) => {
 
   return {
     env: {
-      CC_PLUGIN_CODEX_EXECUTABLE: process.execPath,
-      CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([
+      AGY_PLUGIN_CODEX_EXECUTABLE: process.execPath,
+      AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([
         scriptPath,
         codexHome,
         logPath,
@@ -791,7 +791,7 @@ function runShellWrapper(scriptName, homeDir, sourceRoot, extraEnv = {}) {
       ...process.env,
       HOME: homeDir,
       USERPROFILE: homeDir,
-      CC_PLUGIN_CODEX_TARBALL_URL: `file://${tarballPath}`,
+      AGY_PLUGIN_CODEX_TARBALL_URL: `file://${tarballPath}`,
       ...extraEnv,
     },
     encoding: "utf8",
@@ -831,27 +831,27 @@ describe("installer-cli", () => {
 
     runInstaller("install", homeDir, sourceRoot, {
       ...fakeCodex.env,
-      CC_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
-      CC_PLUGIN_CODEX_MARKETPLACE_NAME: "stale-config-name",
+      AGY_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
+      AGY_PLUGIN_CODEX_MARKETPLACE_NAME: "stale-config-name",
     });
 
     const configFile = path.join(homeDir, ".codex", "config.toml");
     const config = fs.readFileSync(configFile, "utf8");
     const marketplaceFile = path.join(homeDir, ".agents", "plugins", "marketplace.json");
     const hooksFile = path.join(homeDir, ".codex", "hooks.json");
-    const legacyInstallDir = path.join(homeDir, ".codex", "plugins", "cc");
-    const cacheDir = path.join(homeDir, ".codex", "plugins", "cache", "sendbird", "cc", "local");
+    const legacyInstallDir = path.join(homeDir, ".codex", "plugins", "agy");
+    const cacheDir = path.join(homeDir, ".codex", "plugins", "cache", "sendbird", "agy", "local");
     const cachedReviewSkill = path.join(cacheDir, "skills", "review", "SKILL.md");
     const requests = readFakeCodexLog(fakeCodex.logPath);
     const pluginInstallRequest = requests.find((request) => request.method === "plugin/install");
 
-    assert.match(config, /\[plugins\."cc@sendbird"\]/);
+    assert.match(config, /\[plugins\."agy@sendbird"\]/);
     assert.match(config, /hooks = true/);
     assert.doesNotMatch(config, /plugin_hooks/);
     assert.ok(!fs.existsSync(legacyInstallDir), "installer should not create a stable local plugin root");
     assert.ok(!fs.existsSync(hooksFile), "installer should not write global hooks.json");
     assert.ok(fs.existsSync(cachedReviewSkill));
-    assert.match(fs.readFileSync(cachedReviewSkill, "utf8"), /<plugin-root>\/scripts\/claude-companion\.mjs/);
+    assert.match(fs.readFileSync(cachedReviewSkill, "utf8"), /<plugin-root>\/scripts\/agy-companion\.mjs/);
     assert.ok(
       requests.some((request) => request.method === "marketplace/add"),
       "installer should call Codex marketplace/add"
@@ -867,7 +867,7 @@ describe("installer-cli", () => {
       {
         keyPath: "sandbox_workspace_write.writable_roots",
         value: [
-          path.join(homeDir, ".codex", "plugins", "data", "cc-sendbird"),
+          path.join(homeDir, ".codex", "plugins", "data", "agy-sendbird"),
           path.join(homeDir, ".codex", "plugins", "data", "cc"),
           path.join(homeDir, ".codex", "plugins", "data", "claude-code"),
         ],
@@ -905,8 +905,8 @@ describe("installer-cli", () => {
           HOME: homeDir,
           USERPROFILE: homeDir,
           ...fakeCodex.env,
-          CC_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
-          CC_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
+          AGY_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
+          AGY_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
         },
         encoding: "utf8",
       }
@@ -915,20 +915,20 @@ describe("installer-cli", () => {
     const config = fs.readFileSync(path.join(homeDir, ".codex", "config.toml"), "utf8");
 
     assert.notEqual(result.status, 0, "marketplace/add failure should fail install");
-    assert.doesNotMatch(config, /\[plugins\."cc@sendbird"\]/);
-    assert.ok(!fs.existsSync(path.join(homeDir, ".codex", "skills", "cc-review", "SKILL.md")));
+    assert.doesNotMatch(config, /\[plugins\."agy@sendbird"\]/);
+    assert.ok(!fs.existsSync(path.join(homeDir, ".codex", "skills", "agy-review", "SKILL.md")));
     assert.ok(!fs.existsSync(path.join(homeDir, ".agents", "plugins", "marketplace.json")));
   });
 
   it("rejects direct local checkout installs", () => {
     const homeDir = makeTempHome();
-    const installDir = path.join(homeDir, ".codex", "plugins", "cc");
+    const installDir = path.join(homeDir, ".codex", "plugins", "agy");
     copyFixture(installDir);
 
     const result = runLocalPluginInstallerExpectFailure("install", installDir, homeDir);
 
     assert.match(result.stderr, /Local checkout installs are no longer supported/i);
-    assert.match(result.stderr, /codex marketplace add sendbird\/codex-marketplace/i);
+    assert.match(result.stderr, /codex marketplace add seankoji-com\/agy-plugin-codex/i);
   });
 
   it("installs successfully when CODEX_HOME is outside the user's home directory", () => {
@@ -943,11 +943,11 @@ describe("installer-cli", () => {
     runInstaller("install", homeDir, sourceRoot, {
       ...fakeCodex.env,
       CODEX_HOME: codexHome,
-      CC_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
-      CC_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
+      AGY_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
+      AGY_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
     });
 
-    const cacheDir = path.join(codexHome, "plugins", "cache", "sendbird", "cc", "local");
+    const cacheDir = path.join(codexHome, "plugins", "cache", "sendbird", "agy", "local");
 
     assert.ok(fs.existsSync(path.join(cacheDir, "scripts", "installer-cli.mjs")));
   });
@@ -959,10 +959,10 @@ describe("installer-cli", () => {
     copyFixture(sourceRoot);
     const marketplaceRoot = copyMarketplaceFixture(sourceRoot);
 
-    const staleSkillPath = path.join(homeDir, ".codex", "skills", "cc-review", "SKILL.md");
-    const stalePromptPath = path.join(homeDir, ".codex", "prompts", "cc-review.md");
+    const staleSkillPath = path.join(homeDir, ".codex", "skills", "agy-review", "SKILL.md");
+    const stalePromptPath = path.join(homeDir, ".codex", "prompts", "agy-review.md");
     const unrelatedSkillPath = path.join(homeDir, ".codex", "skills", "keep-me", "SKILL.md");
-    const legacyInstallDir = path.join(homeDir, ".codex", "plugins", "cc");
+    const legacyInstallDir = path.join(homeDir, ".codex", "plugins", "agy");
     const hooksFile = path.join(homeDir, ".codex", "hooks.json");
 
     fs.mkdirSync(path.dirname(staleSkillPath), { recursive: true });
@@ -991,8 +991,8 @@ describe("installer-cli", () => {
 
     runInstaller("install", homeDir, sourceRoot, {
       ...fakeCodex.env,
-      CC_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
-      CC_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
+      AGY_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
+      AGY_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
     });
 
     assert.ok(!fs.existsSync(legacyInstallDir));
@@ -1069,15 +1069,15 @@ describe("installer-cli", () => {
 
     runInstaller("install", homeDir, sourceRoot, {
       ...fakeCodex.env,
-      CC_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
-      CC_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
+      AGY_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
+      AGY_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
     });
 
     const marketplacePath = path.join(homeDir, ".agents", "plugins", "marketplace.json");
     const marketplaceBeforeUninstall = JSON.parse(fs.readFileSync(marketplacePath, "utf8"));
     marketplaceBeforeUninstall.plugins.push({
-      name: "cc",
-      source: { source: "local", path: "./stale/cc" },
+      name: "agy",
+      source: { source: "local", path: "./stale/agy" },
       policy: { installation: "AVAILABLE", authentication: "ON_USE" },
       category: "Coding",
     });
@@ -1085,13 +1085,13 @@ describe("installer-cli", () => {
 
     fs.appendFileSync(
       path.join(homeDir, ".codex", "config.toml"),
-      '\n[plugins."cc@sendbird"]\nenabled = true\n',
+      '\n[plugins."agy@sendbird"]\nenabled = true\n',
       "utf8"
     );
 
     runInstaller("uninstall", homeDir, sourceRoot, fakeCodex.env);
 
-    const installDir = path.join(homeDir, ".codex", "plugins", "cc");
+    const installDir = path.join(homeDir, ".codex", "plugins", "agy");
     const marketplace = JSON.parse(
       fs.readFileSync(marketplacePath, "utf8")
     );
@@ -1102,8 +1102,8 @@ describe("installer-cli", () => {
     assert.equal(marketplace.plugins.length, 1);
     assert.equal(marketplace.plugins[0].name, "other");
     assert.match(config, /\[plugins\."github@openai-curated"\]/);
-    assert.doesNotMatch(config, /\[plugins\."cc@local-plugins"\]/);
-    assert.doesNotMatch(config, /\[plugins\."cc@sendbird"\]/);
+    assert.doesNotMatch(config, /\[plugins\."agy@local-plugins"\]/);
+    assert.doesNotMatch(config, /\[plugins\."agy@sendbird"\]/);
     assert.equal(hooks.hooks.SessionStart[0].hooks[0].command, "echo custom-hook");
     assert.deepEqual(
       JSON.parse(
@@ -1125,8 +1125,8 @@ describe("installer-cli", () => {
 
     runInstaller("install", homeDir, sourceRoot, {
       ...fakeCodex.env,
-      CC_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
-      CC_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
+      AGY_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
+      AGY_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
     });
 
     const versionedCacheDir = path.join(
@@ -1135,13 +1135,13 @@ describe("installer-cli", () => {
       "plugins",
       "cache",
       "sendbird",
-      "cc",
+      "agy",
       "1.0.8"
     );
     fs.mkdirSync(path.join(versionedCacheDir, "skills"), { recursive: true });
     fs.appendFileSync(
       path.join(homeDir, ".codex", "config.toml"),
-      '\n[plugins."cc@sendbird"]\nenabled = true\n',
+      '\n[plugins."agy@sendbird"]\nenabled = true\n',
       "utf8"
     );
 
@@ -1160,8 +1160,8 @@ describe("installer-cli", () => {
 
     runInstaller("install", homeDir, sourceRoot, {
       ...fakeCodex.env,
-      CC_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
-      CC_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
+      AGY_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
+      AGY_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
     });
 
     const codexDir = path.join(homeDir, ".codex");
@@ -1170,7 +1170,7 @@ describe("installer-cli", () => {
       "plugins",
       "cache",
       "sendbird",
-      "cc",
+      "agy",
       "1.0.9"
     );
     const hooksFile = path.join(codexDir, "hooks.json");
@@ -1178,7 +1178,7 @@ describe("installer-cli", () => {
     fs.mkdirSync(path.join(versionedCacheDir, "hooks"), { recursive: true });
     fs.appendFileSync(
       path.join(codexDir, "config.toml"),
-      '\n[plugins."cc@sendbird"]\nenabled = true\n',
+      '\n[plugins."agy@sendbird"]\nenabled = true\n',
       "utf8"
     );
     fs.writeFileSync(
@@ -1216,12 +1216,12 @@ describe("installer-cli", () => {
     const fakeCodex = createUninstallOrderCodex(homeDir);
     copyFixture(sourceRoot);
     const codexDir = path.join(homeDir, ".codex");
-    const cacheDir = path.join(codexDir, "plugins", "cache", "sendbird", "cc", "local");
+    const cacheDir = path.join(codexDir, "plugins", "cache", "sendbird", "agy", "local");
     const hooksFile = path.join(codexDir, "hooks.json");
     fs.mkdirSync(path.join(cacheDir, "hooks"), { recursive: true });
     fs.writeFileSync(
       path.join(codexDir, "config.toml"),
-      '[plugins."cc@sendbird"]\nenabled = true\n',
+      '[plugins."agy@sendbird"]\nenabled = true\n',
       "utf8"
     );
     fs.writeFileSync(
@@ -1259,14 +1259,14 @@ describe("installer-cli", () => {
 
     const installEnv = {
       ...fakeCodex.env,
-      CC_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
-      CC_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
+      AGY_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
+      AGY_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
     };
 
     runInstaller("install", homeDir, sourceRoot, installEnv);
     runInstaller("install", homeDir, sourceRoot, installEnv);
 
-    const readmePath = path.join(marketplaceRoot, "plugins", "cc", "README.md");
+    const readmePath = path.join(marketplaceRoot, "plugins", "agy", "README.md");
     fs.appendFileSync(
       readmePath,
       "\n<!-- installer-cli update regression marker -->\n",
@@ -1275,13 +1275,13 @@ describe("installer-cli", () => {
 
     runInstaller("update", homeDir, sourceRoot, installEnv);
 
-    const cacheDir = path.join(homeDir, ".codex", "plugins", "cache", "sendbird", "cc", "local");
+    const cacheDir = path.join(homeDir, ".codex", "plugins", "cache", "sendbird", "agy", "local");
     const cachedReadme = fs.readFileSync(path.join(cacheDir, "README.md"), "utf8");
     const config = fs.readFileSync(path.join(homeDir, ".codex", "config.toml"), "utf8");
 
     assert.match(cachedReadme, /installer-cli update regression marker/);
     assert.equal(
-      countOccurrences(config, /\[plugins\."cc@sendbird"\]/g),
+      countOccurrences(config, /\[plugins\."agy@sendbird"\]/g),
       1,
       "installer should keep exactly one Sendbird plugin enablement block"
     );
@@ -1306,11 +1306,11 @@ describe("installer-cli", () => {
 
     runShellWrapper("install.sh", homeDir, sourceRoot, {
       ...fakeCodex.env,
-      CC_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
-      CC_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
+      AGY_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
+      AGY_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
     });
 
-    const cacheDir = path.join(homeDir, ".codex", "plugins", "cache", "sendbird", "cc", "local");
+    const cacheDir = path.join(homeDir, ".codex", "plugins", "cache", "sendbird", "agy", "local");
     const configFile = path.join(homeDir, ".codex", "config.toml");
     assert.ok(fs.existsSync(path.join(cacheDir, "skills", "review", "SKILL.md")));
     assert.ok(fs.existsSync(configFile));
@@ -1319,6 +1319,6 @@ describe("installer-cli", () => {
 
     const config = fs.readFileSync(configFile, "utf8");
     assert.ok(!fs.existsSync(cacheDir), "shell uninstall should remove the cached plugin copy");
-    assert.doesNotMatch(config, /\[plugins\."cc@sendbird"\]/);
+    assert.doesNotMatch(config, /\[plugins\."agy@sendbird"\]/);
   });
 });

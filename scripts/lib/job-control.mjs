@@ -1,11 +1,11 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  *
- * Derived from OpenAI's codex-plugin-cc and modified for Claude Code delegation.
+ * Derived from OpenAI's codex-plugin-cc and modified for Antigravity delegation.
  *
  * Job control — adapted from codex-plugin-cc.
- * Replaced Codex references with Claude Code.
+ * Replaced Codex references with Antigravity.
  * Added cancel_failed/cancelling status support.
  */
 
@@ -101,7 +101,7 @@ function inferJobPhase(job, progressPreview = []) {
   }
   for (let i = progressPreview.length - 1; i >= 0; i--) {
     const line = progressPreview[i].toLowerCase();
-    if (line.startsWith("starting claude")) return "starting";
+    if (line.startsWith("starting agy")) return "starting";
     if (line.includes("review")) return "reviewing";
     if (line.startsWith("running command:") || line.startsWith("tool_use:")) return "investigating";
     if (line.startsWith("editing") || line.startsWith("writing")) return "editing";
@@ -229,7 +229,7 @@ export function resolveResultJob(cwd, reference) {
   if (selected) {
     return { workspaceRoot, job: enrichJob(selected), state: "terminal" };
   }
-  throw new Error("No finished Claude Code jobs found for this repository yet.");
+  throw new Error("No finished Antigravity jobs found for this repository yet.");
 }
 
 export function resolveCancelableJob(cwd, reference) {
@@ -242,6 +242,6 @@ export function resolveCancelableJob(cwd, reference) {
     return { workspaceRoot, job: selected };
   }
   if (activeJobs.length === 1) return { workspaceRoot, job: activeJobs[0] };
-  if (activeJobs.length > 1) throw new Error("Multiple Claude Code jobs are active. Pass a job id to $cc:cancel.");
-  throw new Error("No active Claude Code jobs to cancel.");
+  if (activeJobs.length > 1) throw new Error("Multiple Antigravity jobs are active. Pass a job id to $agy:cancel.");
+  throw new Error("No active Antigravity jobs to cancel.");
 }

@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
- * Turn-end review gate hook for Codex — Claude Code bridge.
+ * Turn-end review gate hook for Codex — Antigravity bridge.
  *
  * Flow:
  * 1. Check config.stopReviewGate — if disabled -> exit 0.
- * 2. If Claude Code is not ready, log setup guidance and allow stop to continue.
+ * 2. If agy is not ready, log setup guidance and allow stop to continue.
  * 3. Run a targeted turn-end review of the previous Codex response.
- * 4. Parse ALLOW:/BLOCK: from Claude's output.
+ * 4. Parse ALLOW:/BLOCK: from the review's output (§6.1 gate rubric).
  * 5. If the review returns BLOCK, keep the Codex turn active.
+ * 6. Service-limit failures fail open (ALLOW with a warning) — a quota error
+ *    must not wedge an edit-producing Codex turn.
  */
 
 import process from "node:process";
@@ -34,27 +36,24 @@ import {
   writeStopReviewSnapshot
 } from "../scripts/lib/state.mjs";
 import {
-  getClaudeAvailability,
-  getClaudeAuthStatus,
-  cleanupReviewMcpConfig,
-  cleanupSandboxSettings,
-  createReviewMcpConfig,
-  createSandboxSettings,
-  runClaudeReview,
-  SANDBOX_STOP_REVIEW_TOOLS,
-} from "../scripts/lib/claude-cli.mjs";
+  getAgyAuthStatus,
+  getAgyAvailability,
+  runAgyReview,
+} from "../scripts/lib/agy-cli.mjs";
 import { getWorkingTreeFingerprint } from "../scripts/lib/git.mjs";
 import { SESSION_ID_ENV } from "../scripts/lib/tracked-jobs.mjs";
 import { resolveWorkspaceRoot } from "../scripts/lib/workspace.mjs";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(SCRIPT_DIR, "..");
-const SKIP_INTERACTIVE_HOOKS_ENV = "CLAUDE_COMPANION_SKIP_INTERACTIVE_HOOKS";
-const STOP_REVIEW_SUCCESS_NOTE = "Claude Code turn-end review passed.";
+const SKIP_INTERACTIVE_HOOKS_ENV = "AGY_COMPANION_SKIP_INTERACTIVE_HOOKS";
+const STOP_REVIEW_SUCCESS_NOTE = "Antigravity turn-end review passed.";
 const STOP_REVIEW_NO_EDIT_NOTE =
-  "Claude Code turn-end review skipped: the most recent turn made no net edits.";
+  "Antigravity turn-end review skipped: the most recent turn made no net edits.";
 const STOP_REVIEW_NO_BASELINE_NOTE =
-  "Claude Code turn-end review skipped: no user turn was recorded for this Codex session.";
+  "Antigravity turn-end review skipped: no user turn was recorded for this Codex session.";
+const STOP_REVIEW_SERVICE_LIMIT_NOTE =
+  "Antigravity service limit hit; the turn-end review gate failed open (ALLOW) so the turn could finish.";
 const MAX_INLINE_REASON_CHARS = 1_500;
 
 function emitDecision(payload) {
@@ -82,15 +81,15 @@ function boundReasonForHookOutput(reason, runId) {
 }
 
 function buildSetupNote(cwd) {
-  const availability = getClaudeAvailability(cwd);
+  const availability = getAgyAvailability(cwd);
   if (!availability.available) {
-    return `Claude Code is not set up for the review gate. ${availability.detail}. Run $cc:setup.`;
+    return `Antigravity is not set up for the review gate. ${availability.detail}. Run $agy:setup.`;
   }
 
-  const authStatus = getClaudeAuthStatus(cwd);
+  const authStatus = getAgyAuthStatus(cwd);
   if (!authStatus.loggedIn) {
     const detail = authStatus.detail ? ` ${authStatus.detail}.` : "";
-    return `Claude Code is not set up for the review gate.${detail} Run $cc:setup and, if needed, \`claude auth login\`.`;
+    return `Antigravity is not set up for the review gate.${detail} Run $agy:setup and, if needed, \`agy\` once to complete Google sign-in.`;
   }
 
   return null;
@@ -127,7 +126,7 @@ function parseStopReviewOutput(rawOutput) {
       rawOutput: text,
       firstLine: "",
       reason:
-        "The turn-end Claude Code review returned no output. Run $cc:review --wait manually or bypass the gate."
+        "The turn-end Antigravity review returned no output. Run $agy:review --wait manually or bypass the gate."
     };
   }
 
@@ -152,7 +151,7 @@ function parseStopReviewOutput(rawOutput) {
       ok: false,
       rawOutput: text,
       firstLine,
-      reason: `Claude Code turn-end review found issues that still need fixes before ending this Codex turn: ${reason}`
+      reason: `Antigravity turn-end review found issues that still need fixes before ending this Codex turn: ${reason}`
     };
   }
   if (contractFirstLine.startsWith("ALLOW:")) {
@@ -165,7 +164,7 @@ function parseStopReviewOutput(rawOutput) {
       ok: false,
       rawOutput: text,
       firstLine: contractFirstLine,
-      reason: `Claude Code turn-end review found issues that still need fixes before ending this Codex turn: ${reason}`
+      reason: `Antigravity turn-end review found issues that still need fixes before ending this Codex turn: ${reason}`
     };
   }
 
@@ -174,30 +173,44 @@ function parseStopReviewOutput(rawOutput) {
     rawOutput: text,
     firstLine,
     reason:
-      "The turn-end Claude Code review returned an unexpected answer. Run $cc:review --wait manually or bypass the gate."
+      "The turn-end Antigravity review returned an unexpected answer. Run $agy:review --wait manually or bypass the gate."
   };
 }
 
 // ---------------------------------------------------------------------------
-// Review execution via Claude CLI
+// Review execution via the agy CLI
 // ---------------------------------------------------------------------------
 
 async function runStopReview(cwd, input = {}) {
   const prompt = buildStopReviewPrompt(input);
-  const sandboxSettingsFile = createSandboxSettings("read-only");
-  let mcpConfigFile = null;
   const promptBytes = Buffer.byteLength(prompt, "utf8");
 
   try {
-    mcpConfigFile = createReviewMcpConfig(resolveWorkspaceRoot(cwd));
-    const result = await runClaudeReview(cwd, prompt, {
-      allowedTools: SANDBOX_STOP_REVIEW_TOOLS,
-      maxTurns: 5,
-      permissionMode: "dontAsk",
-      settingsFile: sandboxSettingsFile,
-      mcpConfigFile,
-      strictMcpConfig: true,
-    });
+    // agy `--mode plan` is inherently read-only; no sandbox settings or MCP
+    // config are needed for the gate review.
+    const result = await runAgyReview(cwd, prompt, {});
+
+    const agyFields = {
+      agyStatus: result.status ?? null,
+      agyExitCode: Number.isInteger(result.exitCode) ? result.exitCode : null,
+      agyWarning: result.warning ?? null,
+      agyStderr: result.stderr ?? "",
+      agyConversationId: result.conversationId ?? null,
+      promptBytes,
+    };
+
+    if (result.serviceLimited) {
+      // Fail open: quota/rate-limit errors are transient, and blocking the
+      // Codex turn because Antigravity is throttled would wedge the user.
+      return {
+        ok: true,
+        rawOutput: String(result.result ?? "").trim(),
+        firstLine: "ALLOW:",
+        serviceLimitedAllow: true,
+        reason: null,
+        ...agyFields,
+      };
+    }
 
     if (result.status !== "completed") {
       const detail = String(
@@ -207,26 +220,18 @@ async function runStopReview(cwd, input = {}) {
         ok: false,
         rawOutput: String(result.result ?? "").trim(),
         firstLine: "",
-        claudeStatus: result.status ?? null,
-        claudeExitCode: Number.isInteger(result.exitCode) ? result.exitCode : null,
-        claudeWarning: result.warning ?? null,
-        claudeStderr: result.stderr ?? "",
-        claudeSessionId: result.sessionId ?? null,
-        promptBytes,
+        serviceLimitedAllow: false,
         reason: detail
-          ? `The turn-end Claude Code review failed: ${detail}`
-          : "The turn-end Claude Code review failed. Run $cc:review --wait manually or bypass the gate."
+          ? `The turn-end Antigravity review failed: ${detail}`
+          : "The turn-end Antigravity review failed. Run $agy:review --wait manually or bypass the gate.",
+        ...agyFields,
       };
     }
 
     return {
       ...parseStopReviewOutput(result.result),
-      claudeStatus: result.status ?? null,
-      claudeExitCode: Number.isInteger(result.exitCode) ? result.exitCode : null,
-      claudeWarning: result.warning ?? null,
-      claudeStderr: result.stderr ?? "",
-      claudeSessionId: result.sessionId ?? null,
-      promptBytes,
+      serviceLimitedAllow: false,
+      ...agyFields,
     };
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
@@ -234,17 +239,15 @@ async function runStopReview(cwd, input = {}) {
       ok: false,
       rawOutput: "",
       firstLine: "",
-      claudeStatus: "error",
-      claudeExitCode: null,
-      claudeWarning: null,
-      claudeStderr: detail,
-      claudeSessionId: null,
+      serviceLimitedAllow: false,
+      agyStatus: "error",
+      agyExitCode: null,
+      agyWarning: null,
+      agyStderr: detail,
+      agyConversationId: null,
       promptBytes,
-      reason: `The turn-end Claude Code review failed: ${detail}`
+      reason: `The turn-end Antigravity review failed: ${detail}`
     };
-  } finally {
-    cleanupReviewMcpConfig(mcpConfigFile);
-    cleanupSandboxSettings(sandboxSettingsFile);
   }
 }
 
@@ -268,7 +271,7 @@ function checkRunningJobs(workspaceRoot, sessionId = null) {
     (job) => job.status === "queued" || job.status === "running"
   );
   return runningJob
-    ? `Claude Code task ${runningJob.id} is still running. Check $cc:status and use $cc:cancel ${runningJob.id} if you want to stop it.`
+    ? `Antigravity task ${runningJob.id} is still running. Check $agy:status and use $agy:cancel ${runningJob.id} if you want to stop it.`
     : null;
 }
 
@@ -295,7 +298,7 @@ function evaluateTurnEditGate(cwd, workspaceRoot, sessionId) {
     // The baseline is written by UserPromptSubmit, so its absence means no user
     // prompt drove this Codex session and there is no turn to review. Reachable
     // when another host drives Codex headlessly, e.g. a Claude Code review
-    // thread that inherits this plugin.
+    // thread that inherits this plugin (see lib/host-origin.mjs).
     return {
       shouldSkipReview: true,
       skipStatus: "skipped_no_turn_baseline",
@@ -352,7 +355,7 @@ async function main() {
     runId: generateJobId("stop"),
     startedAt: nowIso(),
     status: "started",
-    claudeInvoked: false,
+    agyInvoked: false,
     cwd,
     workspaceRoot,
     sessionId,
@@ -403,7 +406,7 @@ async function main() {
     persistFinal({
       status: turnEditGate.skipStatus ?? "skipped_no_turn_edits",
       reason: turnEditGate.reason,
-      claudeInvoked: false,
+      agyInvoked: false,
       runningTaskNote,
       ...fingerprintFields,
     });
@@ -415,7 +418,7 @@ async function main() {
   const setupNote = buildSetupNote(cwd);
   if (setupNote) {
     persistFinal({
-      status: "skipped_claude_not_ready",
+      status: "skipped_agy_not_ready",
       reason: setupNote,
       runningTaskNote,
       ...fingerprintFields,
@@ -426,8 +429,8 @@ async function main() {
   }
 
   persistSnapshot({
-    status: "running_claude_review",
-    claudeInvoked: true,
+    status: "running_agy_review",
+    agyInvoked: true,
     runningTaskNote,
     ...fingerprintFields,
   });
@@ -435,15 +438,15 @@ async function main() {
   if (!review.ok) {
     persistFinal({
       status: "blocked",
-      claudeInvoked: true,
+      agyInvoked: true,
       reason: review.reason,
       rawOutput: review.rawOutput,
       firstLine: review.firstLine,
-      claudeStatus: review.claudeStatus,
-      claudeExitCode: review.claudeExitCode,
-      claudeWarning: review.claudeWarning,
-      claudeStderr: review.claudeStderr,
-      claudeSessionId: review.claudeSessionId,
+      agyStatus: review.agyStatus,
+      agyExitCode: review.agyExitCode,
+      agyWarning: review.agyWarning,
+      agyStderr: review.agyStderr,
+      agyConversationId: review.agyConversationId,
       promptBytes: review.promptBytes,
       runningTaskNote,
       ...fingerprintFields,
@@ -460,20 +463,27 @@ async function main() {
 
   persistFinal({
     status: "allow",
-    claudeInvoked: true,
-    reason: STOP_REVIEW_SUCCESS_NOTE,
+    agyInvoked: true,
+    reason: review.serviceLimitedAllow
+      ? STOP_REVIEW_SERVICE_LIMIT_NOTE
+      : STOP_REVIEW_SUCCESS_NOTE,
+    serviceLimitedAllow: review.serviceLimitedAllow ?? false,
     rawOutput: review.rawOutput,
     firstLine: review.firstLine,
-    claudeStatus: review.claudeStatus,
-    claudeExitCode: review.claudeExitCode,
-    claudeWarning: review.claudeWarning,
-    claudeStderr: review.claudeStderr,
-    claudeSessionId: review.claudeSessionId,
+    agyStatus: review.agyStatus,
+    agyExitCode: review.agyExitCode,
+    agyWarning: review.agyWarning,
+    agyStderr: review.agyStderr,
+    agyConversationId: review.agyConversationId,
     promptBytes: review.promptBytes,
     runningTaskNote,
     ...fingerprintFields,
   });
-  logNote(STOP_REVIEW_SUCCESS_NOTE);
+  logNote(
+    review.serviceLimitedAllow
+      ? STOP_REVIEW_SERVICE_LIMIT_NOTE
+      : STOP_REVIEW_SUCCESS_NOTE
+  );
   logNote(runningTaskNote);
 }
 

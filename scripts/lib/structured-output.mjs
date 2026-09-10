@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 export function extractFirstJsonObject(text) {
@@ -64,7 +64,7 @@ export function parseStructuredOutput(rawMessage, context = {}) {
     return {
       parsed: null,
       rawOutput: text,
-      parseError: context.failureMessage || "No output from Claude Code.",
+      parseError: context.failureMessage || "No output from Antigravity.",
     };
   }
 
@@ -91,6 +91,6 @@ export function parseStructuredOutput(rawMessage, context = {}) {
   return {
     parsed: null,
     rawOutput: text,
-    parseError: "Could not parse structured JSON output from Claude Code.",
+    parseError: "Could not parse structured JSON output from Antigravity.",
   };
 }

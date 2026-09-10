@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,14 +8,14 @@ import readline from "node:readline";
 import process from "node:process";
 
 const CLIENT_INFO = {
-  name: "cc-plugin-codex-installer",
+  name: "agy-plugin-codex-installer",
   version: "1.0.0",
 };
 const DEFAULT_TIMEOUT_MS = 15000;
 
 function resolveAppServerCommand() {
-  const executable = process.env.CC_PLUGIN_CODEX_EXECUTABLE || "codex";
-  const rawArgs = process.env.CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON;
+  const executable = process.env.AGY_PLUGIN_CODEX_EXECUTABLE || "codex";
+  const rawArgs = process.env.AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON;
 
   if (!rawArgs) {
     return { executable, args: ["app-server"] };
@@ -26,7 +26,7 @@ function resolveAppServerCommand() {
     args = JSON.parse(rawArgs);
   } catch (error) {
     throw new Error(
-      `Invalid CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: ${
+      `Invalid AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: ${
         error instanceof Error ? error.message : String(error)
       }`
     );
@@ -34,7 +34,7 @@ function resolveAppServerCommand() {
 
   if (!Array.isArray(args) || args.some((value) => typeof value !== "string")) {
     throw new Error(
-      "CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON must be a JSON array of strings."
+      "AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON must be a JSON array of strings."
     );
   }
 
@@ -44,7 +44,7 @@ function resolveAppServerCommand() {
 export async function callCodexAppServer({ cwd, method, params }) {
   const { executable, args } = resolveAppServerCommand();
   const timeoutMs = Number.parseInt(
-    process.env.CC_PLUGIN_CODEX_APP_SERVER_TIMEOUT_MS ?? `${DEFAULT_TIMEOUT_MS}`,
+    process.env.AGY_PLUGIN_CODEX_APP_SERVER_TIMEOUT_MS ?? `${DEFAULT_TIMEOUT_MS}`,
     10
   );
 

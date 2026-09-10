@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,7 +18,7 @@ import {
 } from "../scripts/lib/codex-paths.mjs";
 
 const originalPluginData = process.env.PLUGIN_DATA;
-const originalClaudePluginData = process.env.CLAUDE_PLUGIN_DATA;
+const originalClaudePluginData = process.env.AGY_PLUGIN_DATA;
 const originalCodexHome = process.env.CODEX_HOME;
 const tempRoots = [];
 const PROJECT_VERSION = JSON.parse(
@@ -32,9 +32,9 @@ afterEach(() => {
     process.env.PLUGIN_DATA = originalPluginData;
   }
   if (originalClaudePluginData === undefined) {
-    delete process.env.CLAUDE_PLUGIN_DATA;
+    delete process.env.AGY_PLUGIN_DATA;
   } else {
-    process.env.CLAUDE_PLUGIN_DATA = originalClaudePluginData;
+    process.env.AGY_PLUGIN_DATA = originalClaudePluginData;
   }
   if (originalCodexHome === undefined) {
     delete process.env.CODEX_HOME;
@@ -50,15 +50,15 @@ describe("plugin data paths", () => {
   it("accepts Codex's injected plugin data root when it matches the install identity", () => {
     const expectedRoot = resolveExpectedPluginDataRoot();
     process.env.PLUGIN_DATA = expectedRoot;
-    process.env.CLAUDE_PLUGIN_DATA = "/tmp/codex/plugins/data/cc-other";
+    process.env.AGY_PLUGIN_DATA = "/tmp/codex/plugins/data/cc-other";
 
     assert.equal(resolvePluginDataRoot(), expectedRoot);
   });
 
-  it("uses CLAUDE_PLUGIN_DATA when PLUGIN_DATA is absent", () => {
+  it("uses AGY_PLUGIN_DATA when PLUGIN_DATA is absent", () => {
     const expectedRoot = resolveExpectedPluginDataRoot();
     delete process.env.PLUGIN_DATA;
-    process.env.CLAUDE_PLUGIN_DATA = expectedRoot;
+    process.env.AGY_PLUGIN_DATA = expectedRoot;
 
     assert.equal(resolvePluginDataRoot(), expectedRoot);
   });
@@ -70,10 +70,10 @@ describe("plugin data paths", () => {
   });
 
   it("accepts a symlink-equivalent injected plugin data root", () => {
-    const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), "cc-paths-"));
+    const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), "agy-paths-"));
     tempRoots.push(codexHome);
     const actualRoot = path.join(codexHome, "actual-data");
-    const expectedRoot = path.join(codexHome, "plugins", "data", "cc");
+    const expectedRoot = path.join(codexHome, "plugins", "data", "agy");
     fs.mkdirSync(actualRoot, { recursive: true });
     fs.mkdirSync(path.dirname(expectedRoot), { recursive: true });
     fs.symlinkSync(
@@ -100,15 +100,15 @@ describe("plugin data paths", () => {
       "plugins",
       "cache",
       "sendbird",
-      "cc",
+      "agy",
       PROJECT_VERSION
     );
 
     assert.deepEqual(resolvePluginCacheInstallInfo(pluginRoot, codexHome), {
       marketplaceName: "sendbird",
-      pluginName: "cc",
+      pluginName: "agy",
       version: PROJECT_VERSION,
-      pluginId: "cc@sendbird",
+      pluginId: "agy@sendbird",
     });
   });
 
@@ -121,7 +121,7 @@ describe("plugin data paths", () => {
           "plugins",
           "cache",
           "bad name",
-          "cc",
+          "agy",
           PROJECT_VERSION
         ),
         codexHome
@@ -133,7 +133,7 @@ describe("plugin data paths", () => {
   it("builds the official marketplace-qualified data root", () => {
     assert.match(
       resolveMarketplacePluginDataRoot("sendbird"),
-      /plugins[/\\]data[/\\]cc-sendbird$/
+      /plugins[/\\]data[/\\]agy-sendbird$/
     );
     assert.throws(
       () => resolveMarketplacePluginDataRoot("../outside"),
@@ -157,7 +157,7 @@ describe("plugin data paths", () => {
 
     assert.equal(
       resolveExpectedPluginDataRoot("/tmp/source-checkout", codexHome),
-      path.join(codexHome, "plugins", "data", "cc")
+      path.join(codexHome, "plugins", "data", "agy")
     );
     assert.equal(
       resolveExpectedPluginDataRoot(
@@ -166,12 +166,12 @@ describe("plugin data paths", () => {
           "plugins",
           "cache",
           "sendbird",
-          "cc",
+          "agy",
           PROJECT_VERSION
         ),
         codexHome
       ),
-      path.join(codexHome, "plugins", "data", "cc-sendbird")
+      path.join(codexHome, "plugins", "data", "agy-sendbird")
     );
   });
 });

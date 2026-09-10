@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,12 +24,12 @@ import { nowIso, SESSION_ID_ENV } from "../scripts/lib/tracked-jobs.mjs";
 import { resolveWorkspaceRoot } from "../scripts/lib/workspace.mjs";
 
 const MAX_LISTED_JOBS = 3;
-const SKIP_INTERACTIVE_HOOKS_ENV = "CLAUDE_COMPANION_SKIP_INTERACTIVE_HOOKS";
+const SKIP_INTERACTIVE_HOOKS_ENV = "AGY_COMPANION_SKIP_INTERACTIVE_HOOKS";
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-function isExplicitClaudeStatusRequest(prompt) {
+function isExplicitStatusRequest(prompt) {
   const text = String(prompt ?? "").toLowerCase();
-  return text.includes("$cc:status") || text.includes("$cc:result");
+  return text.includes("$agy:status") || text.includes("$agy:result");
 }
 
 function summarizeJob(job) {
@@ -44,20 +44,20 @@ function buildAdditionalContext(jobs) {
   const remaining = jobs.length - listed.length;
   const intro =
     jobs.length === 1
-      ? "A Claude Code background job from this session has finished and has not been surfaced yet."
-      : `${jobs.length} Claude Code background jobs from this session have finished and have not been surfaced yet.`;
+      ? "An Antigravity background job from this session has finished and has not been surfaced yet."
+      : `${jobs.length} Antigravity background jobs from this session have finished and have not been surfaced yet.`;
 
   const guidance =
     jobs.length === 1
-      ? `Before handling the new request, briefly mention that ${jobs[0].id} finished and ask whether the user wants to inspect its result first or continue with the new request. If they want the result, direct them to \`$cc:result ${jobs[0].id}\`. If the user is clearly asking about this finished work already, answer that directly instead of asking again. Do not bring this completion up again automatically after this turn.`
-      : "Before handling the new request, briefly mention that these Claude Code jobs finished and ask whether the user wants to inspect them first or continue with the new request. If they want to inspect them, direct them to `$cc:status` first, then `$cc:result <job-id>` for a specific finished job. If the user is clearly asking about this finished work already, answer that directly instead of asking again. Do not bring these completions up again automatically after this turn.";
+      ? `Before handling the new request, briefly mention that ${jobs[0].id} finished and ask whether the user wants to inspect its result first or continue with the new request. If they want the result, direct them to \`$agy:result ${jobs[0].id}\`. If the user is clearly asking about this finished work already, answer that directly instead of asking again. Do not bring this completion up again automatically after this turn.`
+      : "Before handling the new request, briefly mention that these Antigravity jobs finished and ask whether the user wants to inspect them first or continue with the new request. If they want to inspect them, direct them to `$agy:status` first, then `$agy:result <job-id>` for a specific finished job. If the user is clearly asking about this finished work already, answer that directly instead of asking again. Do not bring these completions up again automatically after this turn.";
 
   return [
     intro,
     "",
     "Finished jobs:",
     ...listed,
-    ...(remaining > 0 ? [`- and ${remaining} more finished Claude Code job(s)`] : []),
+    ...(remaining > 0 ? [`- and ${remaining} more finished Antigravity job(s)`] : []),
     "",
     guidance,
   ].join("\n");
@@ -148,7 +148,7 @@ async function main() {
   }
   const jobs = listJobsSafely(workspaceRoot);
 
-  if (isExplicitClaudeStatusRequest(prompt)) {
+  if (isExplicitStatusRequest(prompt)) {
     return;
   }
 

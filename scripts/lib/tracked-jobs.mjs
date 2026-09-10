@@ -1,12 +1,12 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  *
- * Derived from OpenAI's codex-plugin-cc and modified for Claude Code delegation.
+ * Derived from OpenAI's codex-plugin-cc and modified for Antigravity delegation.
  *
  * Tracked jobs — adapted from codex-plugin-cc.
- * SESSION_ID_ENV changed to CLAUDE_COMPANION_SESSION_ID.
- * Progress messages use [cc] prefix instead of [codex].
+ * SESSION_ID_ENV changed to AGY_COMPANION_SESSION_ID.
+ * Progress messages use [agy] prefix instead of [codex].
  */
 
 import fs from "node:fs";
@@ -17,7 +17,7 @@ import { nowIso, ensureStateDir, getCurrentSession, patchJob, resolveJobLogFile,
 
 export { nowIso };
 
-export const SESSION_ID_ENV = "CLAUDE_COMPANION_SESSION_ID";
+export const SESSION_ID_ENV = "AGY_COMPANION_SESSION_ID";
 export const MAX_JOB_LOG_BYTES = 1024 * 1024;
 const LOG_TRUNCATION_MARKER = "[... earlier log output truncated ...]\n";
 
@@ -210,7 +210,7 @@ export function createProgressReporter({ stderr = false, logFile = null, onEvent
     const event = normalizeProgressEvent(eventOrMessage);
     const stderrMessage = event.stderrMessage ?? event.message;
     if (stderr && stderrMessage) {
-      process.stderr.write(`[cc] ${stderrMessage}\n`);
+      process.stderr.write(`[agy] ${stderrMessage}\n`);
     }
     appendLogLine(logFile, event.message);
     appendLogBlock(logFile, event.logTitle, event.logBody);
@@ -230,7 +230,7 @@ export async function runTrackedJob(job, runner, options = {}) {
   };
   writeJobFile(job.workspaceRoot, job.id, runningRecord);
 
-  // onSpawn callback: persist Claude child PID/identity at spawn time
+  // onSpawn callback: persist agy child PID/identity at spawn time
   // Guarded by status check — only write if job is still running (cancel may have won)
   const onSpawn = ({ pid, pidIdentity }) => {
     const transition = transitionJob(

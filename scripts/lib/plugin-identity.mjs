@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,11 +7,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveCodexHome } from "./codex-paths.mjs";
 
-export const PLUGIN_NAME = "cc";
+export const PLUGIN_NAME = "agy";
 export const LEGACY_MARKETPLACE_NAME = "local-plugins";
 
 const MANAGED_PLUGIN_SECTION_PATTERN =
-  /^\[\s*plugins\s*\.\s*["']?cc@([^"'\]]+)["']?\s*\]\s*(?:#.*)?$/i;
+  /^\[\s*plugins\s*\.\s*["']?agy@([^"'\]]+)["']?\s*\]\s*(?:#.*)?$/i;
 const PLUGIN_ENABLED_PATTERN = /^enabled\s*=\s*true\s*(?:#.*)?$/i;
 const TOML_SECTION_PATTERN = /^\[.*\]\s*(?:#.*)?$/;
 const TOML_ASSIGNMENT_PATTERN = /^[A-Za-z0-9_.-]+\s*=/;

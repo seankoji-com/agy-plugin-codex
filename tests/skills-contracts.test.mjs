@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 import fs from "node:fs";
@@ -16,7 +16,7 @@ function read(relativePath) {
   return fs.readFileSync(path.join(PROJECT_ROOT, relativePath), "utf8");
 }
 
-test("public model contracts document native Fable support and host-owned effort defaults", () => {
+test("public model contracts document native flash aliases and host-owned effort defaults", () => {
   const contracts = [
     "README.md",
     "skills/review/SKILL.md",
@@ -27,15 +27,15 @@ test("public model contracts document native Fable support and host-owned effort
 
   for (const contractPath of contracts) {
     const contract = read(contractPath);
-    assert.match(contract, /fable/i, `${contractPath} must document Fable`);
+    assert.match(contract, /flash-medium/i, `${contractPath} must document flash-medium`);
     // Assert only what the plugin controls: no per-model effort default of its
-    // own, and effort support attributed to Claude Code. Do not pin a claim
+    // own, and effort support attributed to Antigravity. Do not pin a claim
     // about how the CLI handles a specific model + effort pair; that is the
     // host's behavior and this plugin never observes it.
     assert.match(
       contract,
-      /Claude Code (owns|defaults)[^\n]*effort|effort[^\n]*Claude Code/i,
-      `${contractPath} must attribute effort defaults to Claude Code`
+      /Antigravity owns which effort levels each model supports|each keep Antigravity's own effort default/i,
+      `${contractPath} must attribute effort defaults to Antigravity`
     );
     assert.doesNotMatch(
       contract,
@@ -45,7 +45,7 @@ test("public model contracts document native Fable support and host-owned effort
   }
 });
 
-test("model contracts delegate discovery and alias resolution to Claude Code", () => {
+test("model contracts delegate discovery and alias resolution to Antigravity", () => {
   const contracts = [
     "README.md",
     "skills/review/SKILL.md",
@@ -56,10 +56,10 @@ test("model contracts delegate discovery and alias resolution to Claude Code", (
 
   for (const contractPath of contracts) {
     const contract = read(contractPath);
-    assert.match(contract, /\/model/i, `${contractPath} must point to Claude Code model discovery`);
+    assert.match(contract, /agy models/i, `${contractPath} must point to agy model discovery`);
     assert.match(
       contract,
-      /friendly aliases?[^\n]*lowercase/i,
+      /(?:friendly aliases?[^\n]*(?:canonicali[sz]es|map to their catalog IDs)|canonicali[sz]es the friendly aliases?[^\n]*catalog IDs)/i,
       `${contractPath} must document friendly alias canonicalization`
     );
     assert.match(
@@ -79,10 +79,11 @@ test("model contracts delegate discovery and alias resolution to Claude Code", (
   }
 
   const implementation = [
-    read("scripts/claude-companion.mjs"),
-    read("scripts/lib/claude-cli.mjs"),
+    read("scripts/agy-companion.mjs"),
+    read("scripts/lib/agy-cli.mjs"),
   ].join("\n");
-  assert.doesNotMatch(implementation, /MODEL_ALIASES/);
+  // The port owns the three flash aliases (flash-low/medium/high) but nothing
+  // else: no claude model IDs and no ANSI formatting artifacts.
   assert.doesNotMatch(implementation, /claude-(?:opus|sonnet|haiku)-\d/);
   assert.doesNotMatch(implementation, /\[1m\]/);
 });
@@ -112,7 +113,7 @@ test("built-in child commands preserve the workspace for reserved job ids", () =
 test("internal runtime references keep the active-root and notification invariants", () => {
   const reviewRuntime = read("internal-skills/review-runtime/runtime.md");
   const rescueRuntime = read("internal-skills/cli-runtime/runtime.md");
-  const activeRootPattern = /<plugin-root>\/scripts\/claude-companion\.mjs/i;
+  const activeRootPattern = /<plugin-root>\/scripts\/agy-companion\.mjs/i;
 
   assert.match(reviewRuntime, /resolved the active plugin root/i);
   assert.match(reviewRuntime, activeRootPattern);
@@ -122,7 +123,7 @@ test("internal runtime references keep the active-root and notification invarian
   assert.match(reviewRuntime, /Do not request a shell session id, poll a shell session later, or return before the companion command exits/i);
   assert.match(reviewRuntime, /if the available shell tool is `exec_command`, call it once in non-interactive mode and wait for command exit in that same call/i);
   assert.match(reviewRuntime, /`sandbox_permissions: "require_escalated"`/i);
-  assert.match(reviewRuntime, /contact the Claude API for this requested review/i);
+  assert.match(reviewRuntime, /contact the Antigravity API for this requested review/i);
   assert.match(reviewRuntime, /Do not first try the companion command in the default network-disabled sandbox/i);
   assert.match(reviewRuntime, /mention the tool name `send_input` literally/i);
   assert.match(reviewRuntime, /exact tool shape `send_input\(\{ target: <parent-thread-id>, message: <steering-message> \}\)`/i);
@@ -134,31 +135,31 @@ test("internal runtime references keep the active-root and notification invarian
   assert.match(rescueRuntime, /Do not derive a new runtime path from this document or the current working tree/i);
   assert.match(rescueRuntime, /Never emit an empty routing placeholder such as `--owner-session-id {2}--job-id`/i);
   assert.match(rescueRuntime, /Do not add `--quiet-progress` by default/i);
-  assert.match(rescueRuntime, /slash command as literal Claude Code task text/i);
+  assert.match(rescueRuntime, /slash command as literal Antigravity task text/i);
   assert.match(rescueRuntime, /blocking foreground shell-tool call, not as a background terminal\/session/i);
   assert.match(rescueRuntime, /Do not request a shell session id, poll a shell session later, or return before the companion command exits/i);
   assert.match(rescueRuntime, /if the available shell tool is `exec_command`, call it once in non-interactive mode and wait for command exit in that same call/i);
   assert.match(rescueRuntime, /`sandbox_permissions: "require_escalated"`/i);
-  assert.match(rescueRuntime, /contact the Claude API for this requested task/i);
+  assert.match(rescueRuntime, /contact the Antigravity API for this requested task/i);
   assert.match(rescueRuntime, /Do not first try the companion command in the default network-disabled sandbox/i);
   assert.match(rescueRuntime, /allow at most one success-only `send_input` notification before finishing/i);
   assert.match(rescueRuntime, /Mention the tool name `send_input` literally/i);
   assert.match(rescueRuntime, /exact tool shape `send_input\(\{ target: <parent-thread-id>, message: <steering-message> \}\)`/i);
-  assert.match(rescueRuntime, /Use steering messages that point the parent at `\$cc:result` or `\$cc:status` instead of embedding the raw Claude result/i);
+  assert.match(rescueRuntime, /Use steering messages that point the parent at `\$agy:result` or `\$agy:status` instead of embedding the raw Antigravity result/i);
   assert.match(rescueRuntime, /use that same steering message as the child's own final assistant message instead of echoing the raw companion result/i);
 });
 
 test("review skills keep background execution outside the companion command", () => {
   const review = read("skills/review/SKILL.md");
   const adversarial = read("skills/adversarial-review/SKILL.md");
-  const activeRootPattern = /<plugin-root>\/scripts\/claude-companion\.mjs/i;
+  const activeRootPattern = /<plugin-root>\/scripts\/agy-companion\.mjs/i;
 
   assert.match(review, /Resolve `<plugin-root>` as two directories above this `SKILL\.md` file/i);
-  assert.match(review, /Use `\$cc:review` as the default when the user asks for code review, asks you to have Claude review something, or wants a second review pass without explicitly asking for stronger adversarial scrutiny/i);
-  assert.match(review, /If the user asks for stronger challenge on design, tradeoffs, rollout risk, migration risk, configuration behavior, or provides custom review focus text, route to `\$cc:adversarial-review` instead/i);
-  assert.match(review, /If the user wants Claude Code to investigate, validate by changing code, or actually fix\/implement something, route to `\$cc:rescue` instead/i);
-  assert.match(review, /If the overall request is "you review it too, also ask Claude to review in the background, then you aggregate and fix it", keep the delegated Claude part on `\$cc:review` unless the user explicitly asks for a harsher or more adversarial review/i);
-  assert.match(review, /`\$cc:review` does not accept custom focus text/i);
+  assert.match(review, /Use `\$agy:review` as the default when the user asks for code review, asks you to have the delegated model review something, or wants a second review pass without explicitly asking for stronger adversarial scrutiny/i);
+  assert.match(review, /If the user asks for stronger challenge on design, tradeoffs, rollout risk, migration risk, configuration behavior, or provides custom review focus text, route to `\$agy:adversarial-review` instead/i);
+  assert.match(review, /If the user wants the delegated model to investigate, validate by changing code, or actually fix\/implement something, route to `\$agy:rescue` instead/i);
+  assert.match(review, /If the overall request is "you review it too, also ask Antigravity to review in the background, then you aggregate and fix it", keep the delegated Antigravity part on `\$agy:review` unless the user explicitly asks for a harsher or more adversarial review/i);
+  assert.match(review, /`\$agy:review` does not accept custom focus text/i);
   assert.match(review, activeRootPattern);
   assert.match(review, /Treat `--wait` and `--background` as Codex-side execution controls only/i);
   assert.match(review, /Strip them before calling the companion command/i);
@@ -169,10 +170,10 @@ test("review skills keep background execution outside the companion command", ()
   assert.match(review, /Foreground review belongs to the main Codex thread/i);
   assert.match(review, /Do not spawn a review subagent/i);
   assert.match(review, /do not invoke a generic review-runner role/i);
-  assert.match(review, /Do not fall back to raw `claude`, `claude-code`, `claude review`, `bash -lc \.\.\.claude\.\.\.`/i);
+  assert.match(review, /Do not fall back to raw `agy` invocations/i);
   assert.match(review, /If the .*companion command fails, surface that failure/i);
   assert.match(review, /For background review, use Codex's built-in `default` subagent/i);
-  assert.match(review, /Do not satisfy background review by using a generic `claude_review_runner`-style helper role/i);
+  assert.match(review, /Do not satisfy background review by using a generic review-runner helper role/i);
   assert.match(review, /Never satisfy background review by running the companion command itself with shell backgrounding/i);
   assert.match(review, /Background here means "spawn the forwarding child via `spawn_agent` and do not wait in the parent turn\."/i);
   assert.match(review, /background-routing-context --kind review --json/i);
@@ -193,29 +194,29 @@ test("review skills keep background execution outside the companion command", ()
   assert.match(review, /Do not request a shell session id, poll a shell session later, or return before the companion command exits/i);
   assert.match(review, /if the available shell tool is `exec_command`, call it once in non-interactive mode and wait for command exit in that same call/i);
   assert.match(review, /`sandbox_permissions: "require_escalated"`/i);
-  assert.match(review, /contact the Claude API for this requested review/i);
+  assert.match(review, /contact the Antigravity API for this requested review/i);
   assert.match(review, /do not first try the companion command in the default network-disabled sandbox/i);
   assert.match(review, /allow one extra `send_input` call after a successful shell result/i);
   assert.match(review, /must mention the tool name `send_input` literally/i);
   assert.match(review, /must target the provided parent thread id/i);
   assert.match(review, /exact tool shape `send_input\(\{ target: <parent-thread-id>, message: <steering-message> \}\)`/i);
   assert.match(review, /do not silently drop the completion notification path from the child prompt/i);
-  assert.match(review, /Background Claude Code review finished\. Open it with \$cc:result <reserved-job-id>\./i);
+  assert.match(review, /Background Antigravity review finished\. Open it with \$agy:result <reserved-job-id>\./i);
   assert.match(review, /that `send_input` message should use one of those exact steering messages/i);
   assert.match(review, /use these steering messages instead of embedding the raw review result in the notification/i);
-  assert.match(review, /do not embed the raw Claude result inside the notification message/i);
+  assert.match(review, /do not embed the raw Antigravity result inside the notification message/i);
   assert.match(review, /do not include any other prose in that notification message/i);
   assert.match(review, /use that same steering message as the child's own final assistant message instead of echoing the raw review result/i);
-  assert.match(review, /Check the subagent session or \$cc:status for progress, and once it's done, we will let you know to see the results\./i);
-  assert.doesNotMatch(review, /claude-companion\.mjs" review --background/i);
-  assert.doesNotMatch(review, /claude-companion\.mjs" review \$ARGUMENTS/i);
+  assert.match(review, /Check the subagent session or \$agy:status for progress, and once it's done, we will let you know to see the results\./i);
+  assert.doesNotMatch(review, /agy-companion\.mjs" review --background/i);
+  assert.doesNotMatch(review, /agy-companion\.mjs" review \$ARGUMENTS/i);
 
   assert.match(adversarial, /Resolve `<plugin-root>` as two directories above this `SKILL\.md` file/i);
-  assert.match(adversarial, /Do not treat `\$cc:adversarial-review` as the default review path/i);
+  assert.match(adversarial, /Do not treat `\$agy:adversarial-review` as the default review path/i);
   assert.match(adversarial, /Good triggers include requests to challenge the design, challenge tradeoffs, pressure-test a risky change, question whether a migration\/config\/template change really removed the risk, or honor custom focus text that asks for harsher review/i);
-  assert.match(adversarial, /If the user wants Claude Code to go beyond review and perform investigation, validation edits, or implementation work, route to `\$cc:rescue` instead/i);
-  assert.match(adversarial, /If the user asks for a local review plus a separate Claude background review and then wants the main Codex thread to aggregate the findings and apply fixes, keep the delegated Claude portion on `\$cc:review` unless the user explicitly asks for the adversarial angle/i);
-  assert.match(adversarial, /Unlike `\$cc:review`, this skill accepts custom focus text after the flags/i);
+  assert.match(adversarial, /If the user wants the delegated model to go beyond review and perform investigation, validation edits, or implementation work, route to `\$agy:rescue` instead/i);
+  assert.match(adversarial, /If the user asks for a local review plus a separate Antigravity background review and then wants the main Codex thread to aggregate the findings and apply fixes, keep the delegated Antigravity portion on `\$agy:review` unless the user explicitly asks for the adversarial angle/i);
+  assert.match(adversarial, /Unlike `\$agy:review`, this skill accepts custom focus text after the flags/i);
   assert.match(adversarial, activeRootPattern);
   assert.match(adversarial, /Treat `--wait` and `--background` as Codex-side execution controls only/i);
   assert.match(adversarial, /Strip them before calling the companion command/i);
@@ -226,10 +227,10 @@ test("review skills keep background execution outside the companion command", ()
   assert.match(adversarial, /Foreground adversarial review belongs to the main Codex thread/i);
   assert.match(adversarial, /Do not spawn a review subagent/i);
   assert.match(adversarial, /do not invoke a generic review-runner role/i);
-  assert.match(adversarial, /Do not fall back to raw `claude`, `claude-code`, `claude review`, `bash -lc \.\.\.claude\.\.\.`/i);
+  assert.match(adversarial, /Do not fall back to raw `agy` invocations/i);
   assert.match(adversarial, /If the .*companion command fails, surface that failure/i);
   assert.match(adversarial, /For background adversarial review, use Codex's built-in `default` subagent/i);
-  assert.match(adversarial, /Do not satisfy background adversarial review by using a generic `claude_review_runner`-style helper role/i);
+  assert.match(adversarial, /Do not satisfy background adversarial review by using a generic review-runner helper role/i);
   assert.match(adversarial, /Never satisfy background adversarial review by running the companion command itself with shell backgrounding/i);
   assert.match(adversarial, /Background here means "spawn the forwarding child via `spawn_agent` and do not wait in the parent turn\."/i);
   assert.match(adversarial, /background-routing-context --kind review --json/i);
@@ -250,40 +251,40 @@ test("review skills keep background execution outside the companion command", ()
   assert.match(adversarial, /Do not request a shell session id, poll a shell session later, or return before the companion command exits/i);
   assert.match(adversarial, /if the available shell tool is `exec_command`, call it once in non-interactive mode and wait for command exit in that same call/i);
   assert.match(adversarial, /`sandbox_permissions: "require_escalated"`/i);
-  assert.match(adversarial, /contact the Claude API for this requested review/i);
+  assert.match(adversarial, /contact the Antigravity API for this requested review/i);
   assert.match(adversarial, /do not first try the companion command in the default network-disabled sandbox/i);
   assert.match(adversarial, /allow one extra `send_input` call after a successful shell result/i);
   assert.match(adversarial, /must mention the tool name `send_input` literally/i);
   assert.match(adversarial, /must target the provided parent thread id/i);
   assert.match(adversarial, /exact tool shape `send_input\(\{ target: <parent-thread-id>, message: <steering-message> \}\)`/i);
   assert.match(adversarial, /do not silently drop the completion notification path from the child prompt/i);
-  assert.match(adversarial, /Background Claude Code adversarial review finished\. Open it with \$cc:result <reserved-job-id>\./i);
+  assert.match(adversarial, /Background Antigravity adversarial review finished\. Open it with \$agy:result <reserved-job-id>\./i);
   assert.match(adversarial, /that `send_input` message should use one of those exact steering messages/i);
   assert.match(adversarial, /use these steering messages instead of embedding the raw review result in the notification/i);
-  assert.match(adversarial, /do not embed the raw Claude result inside the notification message/i);
+  assert.match(adversarial, /do not embed the raw Antigravity result inside the notification message/i);
   assert.match(adversarial, /do not include any other prose in that notification message/i);
   assert.match(adversarial, /use that same steering message as the child's own final assistant message instead of echoing the raw review result/i);
-  assert.match(adversarial, /Check the subagent session or \$cc:status for progress, and once it's done, we will let you know to see the results\./i);
-  assert.doesNotMatch(adversarial, /claude-companion\.mjs" adversarial-review --background/i);
-  assert.doesNotMatch(adversarial, /claude-companion\.mjs" adversarial-review \$ARGUMENTS/i);
+  assert.match(adversarial, /Check the subagent session or \$agy:status for progress, and once it's done, we will let you know to see the results\./i);
+  assert.doesNotMatch(adversarial, /agy-companion\.mjs" adversarial-review --background/i);
+  assert.doesNotMatch(adversarial, /agy-companion\.mjs" adversarial-review \$ARGUMENTS/i);
 });
 
 test("rescue skill keeps --background and --wait as host-side controls only", () => {
   const rescue = read("skills/rescue/SKILL.md");
-  const activeRootPattern = /<plugin-root>\/scripts\/claude-companion\.mjs/i;
+  const activeRootPattern = /<plugin-root>\/scripts\/agy-companion\.mjs/i;
 
   assert.match(rescue, /Resolve `<plugin-root>` as two directories above this `SKILL\.md` file/i);
-  assert.match(rescue, /Prefer `\$cc:rescue` when the user wants Claude Code to diagnose the issue, validate a risky change by actually editing or testing, apply fixes from a prior review, or carry a task forward across multiple steps/i);
+  assert.match(rescue, /Prefer `\$agy:rescue` when the user wants Antigravity to diagnose the issue, validate a risky change by actually editing or testing, apply fixes from a prior review, or carry a task forward across multiple steps/i);
   assert.match(rescue, /Do not use rescue for "just review this diff" unless the user also wants follow-through work beyond review findings/i);
-  assert.match(rescue, /Do not use rescue merely because the main Codex thread plans to fix things after combining its own review with a separate Claude review/i);
+  assert.match(rescue, /Do not use rescue merely because the main Codex thread plans to fix things after combining its own review with a separate Antigravity review/i);
   assert.match(rescue, activeRootPattern);
   assert.match(rescue, /`--background` and `--wait` are Codex-side execution controls only/i);
-  assert.match(rescue, /Never satisfy background rescue by launching `claude-companion\.mjs task` itself as a detached shell process/i);
-  assert.match(rescue, /Never forward either flag to `claude-companion\.mjs task`/i);
+  assert.match(rescue, /Never satisfy background rescue by launching `agy-companion\.mjs task` itself as a detached shell process/i);
+  assert.match(rescue, /Never forward either flag to `agy-companion\.mjs task`/i);
   assert.match(rescue, /The main Codex thread owns that execution-mode choice/i);
   assert.match(rescue, /If the user explicitly passed `--background`, run the rescue subagent in the background/i);
   assert.match(rescue, /If neither flag is present and the rescue request is small, clearly bounded, or likely to finish quickly, prefer foreground/i);
-  assert.match(rescue, /If neither flag is present and the request looks complicated, open-ended, multi-step, or likely to keep Claude Code running for a while, prefer background execution for the subagent/i);
+  assert.match(rescue, /If neither flag is present and the request looks complicated, open-ended, multi-step, or likely to keep Antigravity running for a while, prefer background execution for the subagent/i);
   assert.match(rescue, /This size-and-scope heuristic belongs to the main Codex thread/i);
   assert.match(rescue, /If the user task text itself begins with a slash command such as `\/simplify`/i);
   assert.match(rescue, /Remove `--background` and `--wait` before spawning the subagent/i);
@@ -296,7 +297,7 @@ test("rescue skill keeps --background and --wait as host-side controls only", ()
   assert.match(rescue, /Background rescue must add `--view-state defer`/i);
   assert.match(rescue, /Background: spawn the rescue subagent without waiting for it in this turn/i);
   assert.match(rescue, /The subagent still runs the companion `task` command in the foreground/i);
-  assert.match(rescue, /tell the user `Claude Code rescue started in the background\. Check the subagent session or \$cc:status for progress, and once it's done, we will let you know to see the results\.`/i);
+  assert.match(rescue, /tell the user `Antigravity rescue started in the background\. Check the subagent session or \$agy:status for progress, and once it's done, we will let you know to see the results\.`/i);
 });
 
 test("rescue skill documents the experimental built-in-agent forwarding path", () => {
@@ -332,17 +333,17 @@ test("rescue skill documents the experimental built-in-agent forwarding path", (
   assert.match(rescue, /exact tool shape `send_input\(\{ target: <parent-thread-id>, message: <steering-message> \}\)`/i);
   assert.match(rescue, /do not silently drop the completion notification path from the child prompt/i);
   assert.match(rescue, /short user-facing template that steers the parent toward explicit result retrieval instead of inlining the raw result/i);
-  assert.match(rescue, /Background Claude Code rescue finished\. Open it with \$cc:result <reserved-job-id>\./i);
+  assert.match(rescue, /Background Antigravity rescue finished\. Open it with \$agy:result <reserved-job-id>\./i);
   assert.match(rescue, /fall back to:/i);
-  assert.match(rescue, /Background Claude Code rescue finished\. Inspect it with \$cc:status first, then use \$cc:result for the finished job you want to open\./i);
+  assert.match(rescue, /Background Antigravity rescue finished\. Inspect it with \$agy:status first, then use \$agy:result for the finished job you want to open\./i);
   assert.match(rescue, /blocking foreground shell-tool call, not as a background terminal\/session/i);
   assert.match(rescue, /Do not request a shell session id, poll a shell session later, or return before the companion command exits/i);
   assert.match(rescue, /if the available shell tool is `exec_command`, call it once in non-interactive mode and wait for command exit in that same call/i);
   assert.match(rescue, /`sandbox_permissions: "require_escalated"`/i);
-  assert.match(rescue, /contact the Claude API for this requested task/i);
+  assert.match(rescue, /contact the Antigravity API for this requested task/i);
   assert.match(rescue, /do not first try the companion command in the default network-disabled sandbox/i);
   assert.match(rescue, /prefer these steering messages over embedding the raw result text/i);
-  assert.match(rescue, /do not embed the raw Claude result inside the notification message/i);
+  assert.match(rescue, /do not embed the raw Antigravity result inside the notification message/i);
   assert.match(rescue, /do not include any other prose in that notification message/i);
   assert.match(rescue, /for background rescue, use that same steering message as the child's own final assistant message instead of echoing the raw companion result/i);
   assert.match(rescue, /background built-in rescue now attempts parent wake-up by default/i);
@@ -364,14 +365,14 @@ test("rescue skill documents the experimental built-in-agent forwarding path", (
   assert.match(rescue, /absolute `--prompt-file` path/i);
   assert.match(rescue, /temporary path outside the repository checkout/i);
   assert.match(rescue, /normal file-write tool or other structured write path/i);
-  assert.match(rescue, /rewrite it into a short delta that names the next thing Claude Code should change or inspect/i);
+  assert.match(rescue, /rewrite it into a short delta that names the next thing Antigravity should change or inspect/i);
   assert.match(rescue, /preserve the language mix and only tighten the execution intent/i);
   assert.match(rescue, /make that output contract explicit instead of broadening the task/i);
   assert.match(rescue, /For `--resume`, `--resume-last`, vague follow-ups, or ambiguous continuation requests, prefer adding a compact `<parent_context>` block/i);
   assert.match(rescue, /Keep `<parent_context>` small and structured/i);
   assert.match(rescue, /`mode` \(`fresh` or `resume`\)/i);
   assert.match(rescue, /`job_id` when the parent reserved one/i);
-  assert.match(rescue, /`claude_session` when a resumable Claude session is already known/i);
+  assert.match(rescue, /`agy_conversation` when a resumable Antigravity conversation is already known/i);
   assert.match(rescue, /`next_delta` for the exact next objective/i);
   assert.match(rescue, /Do not use `<parent_context>` for already-clear fresh tasks unless it adds real value/i);
   assert.match(rescue, /Do not turn it into a free-form summary of the whole parent thread/i);
@@ -379,9 +380,9 @@ test("rescue skill documents the experimental built-in-agent forwarding path", (
   assert.match(rescue, /The child must not do an additional interpretation pass/i);
   assert.match(rescue, /prefer `--resume` or `--resume-last` with a short delta instruction/i);
   assert.match(rescue, /compact strict forwarding message/i);
-  assert.match(rescue, /transient forwarding worker for Claude Code rescue/i);
+  assert.match(rescue, /transient forwarding worker for Antigravity rescue/i);
   assert.match(rescue, /include exactly one shell command to run/i);
-  assert.match(rescue, /ignore stderr progress chatter such as `\[cc\] \.\.\.` lines/i);
+  assert.match(rescue, /ignore stderr progress chatter such as `\[agy\] \.\.\.` lines/i);
   assert.match(rescue, /not to inspect the repository, read files, grep, or do the task directly/i);
   assert.match(rescue, /for foreground rescue only, tell the child to return that command's stdout text exactly/i);
   assert.match(rescue, /copy the resolved rescue task text byte-for-byte/i);
@@ -397,7 +398,7 @@ test("rescue runtime guidance forbids task --background", () => {
   assert.match(runtimeSkill, /Never call `task --background` or invent `task --wait`\./i);
   assert.match(runtimeSkill, /The companion task command always runs in the foreground/i);
   assert.match(runtimeSkill, /`--owner-session-id`, and `--job-id` as routing controls/i);
-  assert.match(runtimeSkill, /If the free-text task begins with `\/`, treat that slash command as literal Claude Code task text/i);
+  assert.match(runtimeSkill, /If the free-text task begins with `\/`, treat that slash command as literal Antigravity task text/i);
   assert.match(runtimeSkill, /Do not add `--quiet-progress` by default for built-in rescue forwarding/i);
   assert.match(runtimeSkill, /Let companion stderr progress remain available in the spawned agent thread/i);
   assert.match(runtimeSkill, /prefer staging it in a temporary prompt file and pass it through `--prompt-file` instead of inlining it in one shell string/i);
@@ -415,12 +416,12 @@ test("rescue parent skill owns resume-candidate exploration", () => {
   const runtimeSkill = read("internal-skills/cli-runtime/runtime.md");
 
   assert.match(rescue, /task-resume-candidate --json/i);
-  assert.match(rescue, /Continue current Claude Code thread/i);
-  assert.match(rescue, /Start a new Claude Code thread/i);
+  assert.match(rescue, /Continue current Antigravity thread/i);
+  assert.match(rescue, /Start a new Antigravity thread/i);
 
   assert.doesNotMatch(runtimeSkill, /task-resume-candidate --json/i);
-  assert.doesNotMatch(runtimeSkill, /Continue current Claude Code thread/i);
-  assert.doesNotMatch(runtimeSkill, /Start a new Claude Code thread/i);
+  assert.doesNotMatch(runtimeSkill, /Continue current Antigravity thread/i);
+  assert.doesNotMatch(runtimeSkill, /Start a new Antigravity thread/i);
   assert.match(runtimeSkill, /The parent rescue skill already owns that choice/i);
 });
 
@@ -428,7 +429,7 @@ test("setup skill repairs native plugin hook feature gates before the final setu
   const setup = read("skills/setup/SKILL.md");
 
   assert.match(setup, /Resolve `<plugin-root>` as two directories above this `SKILL\.md` file/i);
-  assert.match(setup, /<plugin-root>\/scripts\/claude-companion\.mjs/i);
+  assert.match(setup, /<plugin-root>\/scripts\/agy-companion\.mjs/i);
   assert.match(setup, /setup --json/i);
   assert.match(setup, /missing native plugin hook features/i);
   assert.match(setup, /hook trust/i);
@@ -444,7 +445,7 @@ test("simple runtime skills resolve the active plugin root from the skill path",
   const status = read("skills/status/SKILL.md");
   const result = read("skills/result/SKILL.md");
   const cancel = read("skills/cancel/SKILL.md");
-  const activeRootPattern = /<plugin-root>\/scripts\/claude-companion\.mjs/i;
+  const activeRootPattern = /<plugin-root>\/scripts\/agy-companion\.mjs/i;
 
   for (const skillText of [status, result, cancel]) {
     assert.match(skillText, /Resolve `<plugin-root>` as two directories above this `SKILL\.md` file/i);

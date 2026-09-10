@@ -1,7 +1,16 @@
-Copyright 2026 Sendbird, Inc.
+Copyright 2026 Sean Koji.
 
-This project includes material adapted from OpenAI's codex-plugin-cc.
+This project is a port of sendbird/cc-plugin-codex.
+Original work copyright 2026 Sendbird, Inc.
+
+This project includes material adapted from OpenAI's openai/codex-plugin-cc.
 Original work copyright 2026 OpenAI.
+
+Antigravity (agy) is a trademark of Google LLC. This project is not
+affiliated with, endorsed by, or sponsored by Google. Antigravity and the
+`agy` CLI are products of Google; the CLI is installed via its official
+installer, and this plugin merely invokes the user's own locally installed
+and authenticated `agy` binary.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

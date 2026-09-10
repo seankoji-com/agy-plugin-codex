@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, it } from "node:test";
@@ -16,10 +16,10 @@ import { SESSION_ID_ENV } from "../../scripts/lib/tracked-jobs.mjs";
 const PROJECT_ROOT = path.resolve(
   fileURLToPath(new URL("../../", import.meta.url))
 );
-const COMPANION_SCRIPT = path.join(PROJECT_ROOT, "scripts", "claude-companion.mjs");
+const COMPANION_SCRIPT = path.join(PROJECT_ROOT, "scripts", "agy-companion.mjs");
 
-function createFakeClaudeBinary(binDir) {
-  const claudePath = path.join(binDir, "claude");
+function createFakeAgyBinary(binDir) {
+  const agyPath = path.join(binDir, "agy");
   const stubSource = `#!/usr/bin/env node
 const args = process.argv.slice(2);
 
@@ -35,107 +35,82 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function readStdin() {
-  let body = "";
-  process.stdin.setEncoding("utf8");
-  for await (const chunk of process.stdin) {
-    body += chunk;
-  }
-  return body;
-}
-
-function sanitize(value) {
-  return String(value || "session")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 24) || "session";
-}
-
 async function main() {
   if (args[0] === "--version") {
-    process.stdout.write("2.1.90 (Claude Code)\\n");
+    process.stdout.write("1.1.28 (agylocal)\\n");
     return;
   }
 
-  if (args[0] === "auth" && args[1] === "status") {
-    process.stdout.write("authenticated\\n");
-    return;
-  }
-
-  if (args[0] !== "-p") {
+  if (args.includes("--output-format") === false) {
     process.stderr.write("unexpected arguments: " + JSON.stringify(args) + "\\n");
     process.exitCode = 2;
     return;
   }
 
-  const promptIndex = args.lastIndexOf("--");
-  const prompt =
-    promptIndex >= 0
-      ? args.slice(promptIndex + 1).join(" ")
-      : await readStdin();
+  const outputFormatIndex = args.indexOf("--output-format");
+  if (args[outputFormatIndex + 1] !== "json") {
+    process.stderr.write("unexpected output format: " + JSON.stringify(args) + "\\n");
+    process.exitCode = 2;
+    return;
+  }
+
+  // Prompt arrives as the final -p=<prompt> argument (agy -p contract).
+  const promptArg = args.at(-1);
+  const prompt = (promptArg ?? "").replace(/^-p=/, "");
   const delay = Number((prompt.match(/\\bdelay=(\\d+)\\b/) || [])[1] || 80);
-  if (process.env.CLAUDE_ARGS_FILE) {
+
+  if (process.env.AGY_ARGS_FILE) {
     require("node:fs").writeFileSync(
-      process.env.CLAUDE_ARGS_FILE,
+      process.env.AGY_ARGS_FILE,
       JSON.stringify(args, null, 2) + "\\n",
       "utf8"
     );
   }
-  const resumeId = getValue("--resume");
+
+  const model = getValue("--model");
+  const conversationArg = getValue("--conversation");
   const jsonSchema = getValue("--json-schema");
-  const sessionId =
-    resumeId ||
-    getValue("--session-id") ||
-    \`stub-\${sanitize(prompt)}-\${process.pid}\`;
+  const conversationId =
+    conversationArg ||
+    \`stub-\${(model || "flash-medium").split("/").pop()}-\${process.pid}\`;
   const emitUnknownNoTerminal = /\\bunknown-no-terminal\\b/.test(prompt);
-  const resultText = \`completed:\${prompt}\`;
-  const structuredResult = jsonSchema
-    ? {
+
+  if (emitUnknownNoTerminal) {
+    // Exit 0 with no recognizable envelope -> status "unknown".
+    process.stdout.write("some raw text without an envelope\\n");
+    return;
+  }
+
+  const response = jsonSchema
+    ? JSON.stringify({
         verdict: "approve",
         summary: "Structured output path works.",
         findings: [],
         next_steps: [],
-      }
-    : null;
+      })
+    : \`completed:\${prompt}\`;
 
   process.stdout.write(
     JSON.stringify({
-      type: "stream_event",
-      session_id: sessionId,
-      event: {
-        delta: {
-          type: "text_delta",
-          text: resultText,
-        },
-      },
+      conversation_id: conversationId,
+      status: "SUCCESS",
+      response,
+      error: "",
+      duration_seconds: delay / 1000,
+      num_turns: 1,
+      usage: {},
     }) + "\\n"
   );
 
-  if (process.env.CLAUDE_INVOCATION_FILE) {
+  if (process.env.AGY_INVOCATION_FILE) {
     require("node:fs").writeFileSync(
-      process.env.CLAUDE_INVOCATION_FILE,
-      JSON.stringify({ args, prompt, sessionId }, null, 2) + "\\n",
+      process.env.AGY_INVOCATION_FILE,
+      JSON.stringify({ args, prompt, conversationId }, null, 2) + "\\n",
       "utf8"
     );
   }
 
   await sleep(delay);
-
-  if (emitUnknownNoTerminal) {
-    return;
-  }
-
-  process.stdout.write(
-    JSON.stringify({
-      type: "result",
-      session_id: sessionId,
-      result: structuredResult ? "" : resultText,
-      ...(structuredResult
-        ? { structured_output: structuredResult }
-        : {}),
-    }) + "\\n"
-  );
 }
 
 main().catch((error) => {
@@ -144,12 +119,12 @@ main().catch((error) => {
 });
 `;
 
-  fs.writeFileSync(claudePath, stubSource, "utf8");
-  fs.chmodSync(claudePath, 0o755);
+  fs.writeFileSync(agyPath, stubSource, "utf8");
+  fs.chmodSync(agyPath, 0o755);
 }
 
 function createTestEnvironment() {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "claude-companion-int-"));
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-companion-int-"));
   const homeDir = path.join(rootDir, "home");
   const binDir = path.join(rootDir, "bin");
   const workspaceDir = path.join(rootDir, "workspace");
@@ -158,7 +133,15 @@ function createTestEnvironment() {
   fs.mkdirSync(binDir, { recursive: true });
   fs.mkdirSync(workspaceDir, { recursive: true });
 
-  createFakeClaudeBinary(binDir);
+  // agy auth state under ~/.gemini so the companion's auth check passes.
+  fs.mkdirSync(path.join(homeDir, ".gemini", "antigravity-cli"), { recursive: true });
+  fs.writeFileSync(
+    path.join(homeDir, ".gemini", "antigravity-cli", "settings.json"),
+    JSON.stringify({ account: "test@example.com" }, null, 2) + "\n",
+    "utf8"
+  );
+
+  createFakeAgyBinary(binDir);
 
   return {
     rootDir,
@@ -338,7 +321,7 @@ function writeSessionScopedJob(testEnv, jobId, payload) {
     ".codex",
     "plugins",
     "data",
-    "cc",
+    "agy",
     "state",
     workspaceHash
   );
@@ -360,7 +343,7 @@ function writeCurrentSessionMarker(testEnv, sessionId, options = {}) {
     ".codex",
     "plugins",
     "data",
-    "cc",
+    "agy",
     "state",
     workspaceHash
   );
@@ -388,7 +371,7 @@ function stateDirFor(testEnv) {
     ".codex",
     "plugins",
     "data",
-    "cc",
+    "agy",
     "state",
     workspaceHash
   );
@@ -432,7 +415,7 @@ function runCompanion(args, options = {}) {
   assert.equal(
     result.status,
     0,
-    `Command failed: node scripts/claude-companion.mjs ${args.join(" ")}\n${result.stderr}`
+    `Command failed: node scripts/agy-companion.mjs ${args.join(" ")}\n${result.stderr}`
   );
   return result;
 }
@@ -457,7 +440,7 @@ function runCompanionExpectFailure(args, options = {}) {
   assert.notEqual(
     result.status,
     0,
-    `Expected command to fail: node scripts/claude-companion.mjs ${args.join(" ")}`
+    `Expected command to fail: node scripts/agy-companion.mjs ${args.join(" ")}`
   );
   return result;
 }
@@ -486,7 +469,7 @@ function runCompanionAsync(args, options = {}) {
       child.kill("SIGKILL");
       reject(
         new Error(
-          `Timed out running node scripts/claude-companion.mjs ${args.join(" ")}`
+          `Timed out running node scripts/agy-companion.mjs ${args.join(" ")}`
         )
       );
     }, timeoutMs);
@@ -516,7 +499,7 @@ function runCompanionAsync(args, options = {}) {
       if (code !== 0) {
         reject(
           new Error(
-            `Command failed: node scripts/claude-companion.mjs ${args.join(" ")}\n${stderr}`
+            `Command failed: node scripts/agy-companion.mjs ${args.join(" ")}\n${stderr}`
           )
         );
         return;
@@ -667,17 +650,17 @@ function assertCompletedReviewPayload(payload) {
   assert.equal(payload.storedJob.result.review, "Review");
   assert.equal(payload.storedJob.result.target.mode, "working-tree");
   assert.equal(payload.storedJob.result.codex.status, "completed");
-  assert.match(payload.storedJob.rendered, /# Claude Code Review/);
+  assert.match(payload.storedJob.rendered, /# Antigravity Review/);
 }
 
-describe("claude-companion integration", () => {
+describe("agy-companion integration", () => {
   it("setup toggles the review gate on and off for the current workspace", () => {
     const testEnv = createTestEnvironment();
     const fakeCodex = createFakeCodexAppServer(testEnv, []);
     const setupEnv = {
       ...testEnv.env,
-      CC_PLUGIN_CODEX_EXECUTABLE: process.execPath,
-      CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([fakeCodex.serverPath]),
+      AGY_PLUGIN_CODEX_EXECUTABLE: process.execPath,
+      AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([fakeCodex.serverPath]),
     };
 
     try {
@@ -688,7 +671,7 @@ describe("claude-companion integration", () => {
       assert.equal(initial.reviewGateEnabled, null);
       assert.match(
         initial.nextSteps.join("\n"),
-        /Restart Codex.*rerun `\$cc:setup`/
+        /Restart Codex.*rerun `\$agy:setup`/
       );
 
       const enabled = runCompanion(
@@ -728,7 +711,7 @@ describe("claude-companion integration", () => {
         {
           env: {
             ...testEnv.env,
-            CC_PLUGIN_CODEX_EXECUTABLE: path.join(
+            AGY_PLUGIN_CODEX_EXECUTABLE: path.join(
               testEnv.rootDir,
               "missing-codex"
             ),
@@ -830,9 +813,9 @@ describe("claude-companion integration", () => {
         {
           env: {
             ...testEnv.env,
-            CC_PLUGIN_CODEX_EXECUTABLE: process.execPath,
-            CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([fakeCodex.serverPath]),
-            CC_PLUGIN_CODEX_FORCE_HOOK_TRUST: "1",
+            AGY_PLUGIN_CODEX_EXECUTABLE: process.execPath,
+            AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([fakeCodex.serverPath]),
+            AGY_PLUGIN_CODEX_FORCE_HOOK_TRUST: "1",
           },
         }
       );
@@ -880,6 +863,7 @@ describe("claude-companion integration", () => {
           keyPath: "sandbox_workspace_write.writable_roots",
           value: [
             testEnv.workspaceDir,
+            path.join(testEnv.homeDir, ".codex", "plugins", "data", "agy"),
             path.join(testEnv.homeDir, ".codex", "plugins", "data", "cc"),
             path.join(
               testEnv.homeDir,
@@ -903,7 +887,7 @@ describe("claude-companion integration", () => {
       );
       assert.match(
         report.nextSteps.join("\n"),
-        /Restart Codex.*rerun `\$cc:setup`/
+        /Restart Codex.*rerun `\$agy:setup`/
       );
       assert.equal(
         fs.existsSync(path.join(stateDirFor(testEnv), "config.json")),
@@ -915,7 +899,7 @@ describe("claude-companion integration", () => {
     }
   });
 
-  it("forwards task model, effort, prompt-file, and write mode to Claude", () => {
+  it("forwards task model, effort, prompt-file, and write mode to agy", () => {
     const testEnv = createTestEnvironment();
 
     try {
@@ -930,7 +914,7 @@ describe("claude-companion integration", () => {
           testEnv.workspaceDir,
           "--write",
           "--model",
-          "sonnet",
+          "flash-high",
           "--effort",
           "high",
           "--prompt-file",
@@ -940,7 +924,7 @@ describe("claude-companion integration", () => {
         {
           env: {
             ...testEnv.env,
-            CLAUDE_ARGS_FILE: argsFile,
+            AGY_ARGS_FILE: argsFile,
           },
         }
       );
@@ -948,15 +932,17 @@ describe("claude-companion integration", () => {
       assert.match(result.stdout, /completed:prompt-file body delay=20/);
 
       const args = JSON.parse(fs.readFileSync(argsFile, "utf8"));
-      assert.equal(args[0], "-p");
+      assert.equal(args[0], "--model");
       assert.ok(args.includes("--model"));
-      assert.equal(args[args.indexOf("--model") + 1], "sonnet");
+      assert.equal(args[args.indexOf("--model") + 1], "gemini-3.8-flash-high");
       assert.ok(args.includes("--effort"));
       assert.equal(args[args.indexOf("--effort") + 1], "high");
-      assert.ok(args.includes("--permission-mode"));
-      assert.equal(args[args.indexOf("--permission-mode") + 1], "bypassPermissions");
+      assert.ok(args.includes("--mode"));
+      assert.equal(args[args.indexOf("--mode") + 1], "accept-edits");
+      assert.ok(!args.includes("--permission-mode"));
       assert.ok(!args.includes("--allowedTools"));
       assert.ok(!args.includes("--prompt-file"));
+      assert.ok(args.at(-1).startsWith("-p="));
     } finally {
       cleanupTestEnvironment(testEnv);
     }
@@ -966,7 +952,7 @@ describe("claude-companion integration", () => {
     const testEnv = createTestEnvironment();
 
     try {
-      for (const alias of ["fable", "opus", "sonnet", "haiku"]) {
+      for (const alias of ["flash-low", "flash-medium", "flash-high"]) {
         const argsFile = path.join(testEnv.rootDir, `${alias}-default-effort-args.json`);
         const requestedAlias = alias.toUpperCase();
         runCompanion(
@@ -982,13 +968,18 @@ describe("claude-companion integration", () => {
           {
             env: {
               ...testEnv.env,
-              CLAUDE_ARGS_FILE: argsFile,
+              AGY_ARGS_FILE: argsFile,
             },
           }
         );
 
         const args = JSON.parse(fs.readFileSync(argsFile, "utf8"));
-        assert.equal(args[args.indexOf("--model") + 1], alias);
+        const expectedModel = {
+          "flash-low": "gemini-3.8-flash-low",
+          "flash-medium": "gemini-3.8-flash-medium",
+          "flash-high": "gemini-3.8-flash-high",
+        }[alias];
+        assert.equal(args[args.indexOf("--model") + 1], expectedModel);
         assert.equal(args.includes("--effort"), false);
       }
     } finally {
@@ -996,31 +987,31 @@ describe("claude-companion integration", () => {
     }
   });
 
-  it("canonicalizes native Fable without inferring effort through task and review flows", () => {
+  it("canonicalizes flash aliases without inferring effort through task and review flows", () => {
     const testEnv = createTestEnvironment();
 
     try {
-      const taskArgsFile = path.join(testEnv.rootDir, "fable-task-args.json");
+      const taskArgsFile = path.join(testEnv.rootDir, "flash-task-args.json");
       runCompanion(
         [
           "task",
           "--cwd",
           testEnv.workspaceDir,
           "--model",
-          "FaBlE",
+          "FLASH-HIGH",
           "--quiet-progress",
-          "fable task delay=20",
+          "flash task delay=20",
         ],
         {
           env: {
             ...testEnv.env,
-            CLAUDE_ARGS_FILE: taskArgsFile,
+            AGY_ARGS_FILE: taskArgsFile,
           },
         }
       );
 
       const taskArgs = JSON.parse(fs.readFileSync(taskArgsFile, "utf8"));
-      assert.equal(taskArgs[taskArgs.indexOf("--model") + 1], "fable");
+      assert.equal(taskArgs[taskArgs.indexOf("--model") + 1], "gemini-3.8-flash-high");
       assert.equal(taskArgs.includes("--effort"), false);
 
       setupGitWorkspace(testEnv.workspaceDir);
@@ -1030,7 +1021,7 @@ describe("claude-companion integration", () => {
         ["review", []],
         ["adversarial-review", ["focus on model routing"]],
       ]) {
-        const invocationFile = path.join(testEnv.rootDir, `fable-${command}-invocation.json`);
+        const invocationFile = path.join(testEnv.rootDir, `flash-${command}-invocation.json`);
         runCompanion(
           [
             command,
@@ -1039,19 +1030,19 @@ describe("claude-companion integration", () => {
             "--scope",
             "working-tree",
             "--model",
-            "FaBlE",
+            "FLASH-HIGH",
             ...focusText,
           ],
           {
             env: {
               ...testEnv.env,
-              CLAUDE_INVOCATION_FILE: invocationFile,
+              AGY_INVOCATION_FILE: invocationFile,
             },
           }
         );
 
         const invocation = JSON.parse(fs.readFileSync(invocationFile, "utf8"));
-        assert.equal(invocation.args[invocation.args.indexOf("--model") + 1], "fable");
+        assert.equal(invocation.args[invocation.args.indexOf("--model") + 1], "gemini-3.8-flash-high");
         assert.equal(invocation.args.includes("--effort"), false);
       }
     } finally {
@@ -1093,15 +1084,15 @@ describe("claude-companion integration", () => {
         {
           env: {
             ...sessionEnv,
-            CLAUDE_ARGS_FILE: resumeArgsFile,
+            AGY_ARGS_FILE: resumeArgsFile,
           },
         }
       );
 
       const resumeArgs = JSON.parse(fs.readFileSync(resumeArgsFile, "utf8"));
-      assert.ok(resumeArgs.includes("--resume"));
-      const resumedSessionId = resumeArgs[resumeArgs.indexOf("--resume") + 1];
-      assert.ok(typeof resumedSessionId === "string" && resumedSessionId.length > 0);
+      assert.ok(resumeArgs.includes("--conversation"));
+      const resumedConversationId = resumeArgs[resumeArgs.indexOf("--conversation") + 1];
+      assert.ok(typeof resumedConversationId === "string" && resumedConversationId.length > 0);
 
       const freshArgsFile = path.join(testEnv.rootDir, "fresh-args.json");
       runCompanion(
@@ -1116,13 +1107,13 @@ describe("claude-companion integration", () => {
         {
           env: {
             ...sessionEnv,
-            CLAUDE_ARGS_FILE: freshArgsFile,
+            AGY_ARGS_FILE: freshArgsFile,
           },
         }
       );
 
       const freshArgs = JSON.parse(fs.readFileSync(freshArgsFile, "utf8"));
-      assert.ok(!freshArgs.includes("--resume"));
+      assert.ok(!freshArgs.includes("--conversation"));
     } finally {
       cleanupTestEnvironment(testEnv);
     }
@@ -1144,12 +1135,12 @@ describe("claude-companion integration", () => {
           "--scope",
           "working-tree",
           "--model",
-          "haiku",
+          "flash-high",
         ],
         {
           env: {
             ...testEnv.env,
-            CLAUDE_INVOCATION_FILE: reviewInvocationFile,
+            AGY_INVOCATION_FILE: reviewInvocationFile,
           },
         }
       );
@@ -1159,10 +1150,10 @@ describe("claude-companion integration", () => {
       );
       assert.equal(
         reviewInvocation.args[reviewInvocation.args.indexOf("--model") + 1],
-        "haiku"
+        "gemini-3.8-flash-high"
       );
       assert.match(reviewInvocation.prompt, /working tree diff/i);
-      assert.match(reviewResult.stdout, /Claude Code Review/);
+      assert.match(reviewResult.stdout, /Antigravity Review/);
 
       const branchInvocationFile = path.join(testEnv.rootDir, "branch-review-invocation.json");
       runCompanion(
@@ -1176,7 +1167,7 @@ describe("claude-companion integration", () => {
         {
           env: {
             ...testEnv.env,
-            CLAUDE_INVOCATION_FILE: branchInvocationFile,
+            AGY_INVOCATION_FILE: branchInvocationFile,
           },
         }
       );
@@ -1279,34 +1270,44 @@ describe("claude-companion integration", () => {
     }
   });
 
-  it("sends a Windows-sized review prompt through stdin instead of argv", () => {
+  it("omits an oversized working-tree diff and keeps the review prompt bounded", () => {
     const testEnv = createTestEnvironment();
 
     try {
       setupGitWorkspace(testEnv.workspaceDir);
       fs.writeFileSync(
         path.join(testEnv.workspaceDir, "app.js"),
-        "review-line\n".repeat(3_500),
+        "review-line\n".repeat(9_000),
         "utf8"
       );
       const invocationFile = path.join(testEnv.rootDir, "large-review-invocation.json");
 
       const result = runCompanion(
-        ["review", "--cwd", testEnv.workspaceDir, "--scope", "working-tree", "--model", "haiku"],
+        ["review", "--cwd", testEnv.workspaceDir, "--scope", "working-tree", "--model", "flash-high"],
         {
           env: {
             ...testEnv.env,
-            CLAUDE_INVOCATION_FILE: invocationFile,
+            AGY_INVOCATION_FILE: invocationFile,
           },
         }
       );
 
       const invocation = JSON.parse(fs.readFileSync(invocationFile, "utf8"));
-      assert.ok(Buffer.byteLength(invocation.prompt, "utf8") > 32_767);
-      assert.match(invocation.prompt, /review-line/);
-      assert.equal(invocation.args.includes("--"), false);
-      assert.ok(!invocation.args.includes(invocation.prompt));
-      assert.match(result.stdout, /Claude Code Review/);
+      // The oversized diff must not be inlined into the argv prompt; the review
+      // prompt falls back to concise status/stat context and instructs the model
+      // to inspect the diff directly with read-only git commands.
+      assert.match(
+        invocation.prompt,
+        /Large diff omitted\. Inspect (?:staged|unstaged|the) [^\n]* with read-only git commands/i
+      );
+      const maxPromptChars =
+        process.platform === "win32" ? 20_000 : 90_000;
+      assert.ok(
+        invocation.prompt.length <= maxPromptChars,
+        `review prompt must stay within the argv cap, got ${invocation.prompt.length}`
+      );
+      assert.ok(!invocation.args.some((arg) => arg.includes("review-line") && !arg.startsWith("-p=")));
+      assert.match(result.stdout, /Antigravity Review/);
     } finally {
       cleanupTestEnvironment(testEnv);
     }
@@ -1328,13 +1329,13 @@ describe("claude-companion integration", () => {
           "--scope",
           "working-tree",
           "--model",
-          "haiku",
+          "flash-high",
           "focus on command injection",
         ],
         {
           env: {
             ...testEnv.env,
-            CLAUDE_INVOCATION_FILE: invocationFile,
+            AGY_INVOCATION_FILE: invocationFile,
           },
         }
       );
@@ -1342,7 +1343,7 @@ describe("claude-companion integration", () => {
       const invocation = JSON.parse(fs.readFileSync(invocationFile, "utf8"));
       assert.equal(
         invocation.args[invocation.args.indexOf("--model") + 1],
-        "haiku"
+        "gemini-3.8-flash-high"
       );
       assert.match(invocation.prompt, /focus on command injection/i);
       assert.match(result.stdout, /Adversarial Review/);
@@ -2255,7 +2256,7 @@ describe("claude-companion integration", () => {
         { env: sessionEnv }
       );
 
-      assert.match(result.stderr, /No previous Claude Code task session was found/i);
+      assert.match(result.stderr, /No previous Antigravity task conversation was found/i);
       assert.equal(fs.existsSync(reservePath), false);
     } finally {
       cleanupTestEnvironment(testEnv);
@@ -2791,7 +2792,7 @@ describe("claude-companion integration", () => {
         ["result", "--cwd", testEnv.workspaceDir, launches[0].jobId],
         { env: testEnv.env }
       ).stdout;
-      assert.match(rendered, /# Claude Code Review/);
+      assert.match(rendered, /# Antigravity Review/);
       assert.match(rendered, /Target: working tree diff/);
     } finally {
       cleanupTestEnvironment(testEnv);

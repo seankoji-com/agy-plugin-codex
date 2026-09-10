@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -39,11 +39,11 @@ const HOME_DIR = os.homedir();
 const CODEX_CONFIG_FILE = path.join(CODEX_HOME, "config.toml");
 const LEGACY_INSTALL_DIR = path.join(CODEX_HOME, "plugins", PLUGIN_NAME);
 const PERSONAL_MARKETPLACE_FILE = path.join(HOME_DIR, ".agents", "plugins", "marketplace.json");
-const DEFAULT_MARKETPLACE_NAME = "sendbird";
-const DEFAULT_MARKETPLACE_SOURCE = "sendbird/codex-marketplace";
+const DEFAULT_MARKETPLACE_NAME = "seankoji-com";
+const DEFAULT_MARKETPLACE_SOURCE = "seankoji-com/agy-plugin-codex";
 
 function usage() {
-  console.error("Usage: cc-plugin-codex <install|update|uninstall>");
+  console.error("Usage: agy-plugin-codex <install|update|uninstall>");
   process.exit(1);
 }
 
@@ -78,11 +78,11 @@ function removeIfEmpty(dirPath) {
 
 function resolveInstallerMarketplaceConfig() {
   const marketplaceName =
-    process.env.CC_PLUGIN_CODEX_MARKETPLACE_NAME?.trim() || DEFAULT_MARKETPLACE_NAME;
+    process.env.AGY_PLUGIN_CODEX_MARKETPLACE_NAME?.trim() || DEFAULT_MARKETPLACE_NAME;
   const source =
-    process.env.CC_PLUGIN_CODEX_MARKETPLACE_SOURCE?.trim() || DEFAULT_MARKETPLACE_SOURCE;
-  const refName = process.env.CC_PLUGIN_CODEX_MARKETPLACE_REF?.trim() || null;
-  const sparsePaths = (process.env.CC_PLUGIN_CODEX_MARKETPLACE_SPARSE_PATHS ?? "")
+    process.env.AGY_PLUGIN_CODEX_MARKETPLACE_SOURCE?.trim() || DEFAULT_MARKETPLACE_SOURCE;
+  const refName = process.env.AGY_PLUGIN_CODEX_MARKETPLACE_REF?.trim() || null;
+  const sparsePaths = (process.env.AGY_PLUGIN_CODEX_MARKETPLACE_SPARSE_PATHS ?? "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
@@ -144,7 +144,7 @@ function removeManagedPluginConfigSections() {
     if (skip && trimmed.startsWith("[")) {
       skip = false;
     }
-    if (!skip && /^\[\s*plugins\s*\.\s*["']?cc@([^"'\]]+)["']?\s*\]\s*(?:#.*)?$/i.test(trimmed)) {
+    if (!skip && /^\[\s*plugins\s*\.\s*["']?(?:agy|cc)@([^"'\]]+)["']?\s*\]\s*(?:#.*)?$/i.test(trimmed)) {
       skip = true;
       changed = true;
       continue;

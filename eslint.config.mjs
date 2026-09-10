@@ -4,7 +4,6 @@ import globals from "globals";
 export default [
   {
     ignores: [
-      ".claude/**",
       ".githooks/**",
       "assets/*.png",
       "node_modules/**",

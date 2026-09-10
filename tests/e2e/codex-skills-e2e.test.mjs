@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, it } from "node:test";
@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 const PROJECT_ROOT = path.resolve(
   fileURLToPath(new URL("../../", import.meta.url))
 );
-const COMPANION_SCRIPT = path.join(PROJECT_ROOT, "scripts", "claude-companion.mjs");
+const COMPANION_SCRIPT = path.join(PROJECT_ROOT, "scripts", "agy-companion.mjs");
 const INSTALLER_SCRIPT = path.join(PROJECT_ROOT, "scripts", "installer-cli.mjs");
 const RESCUE_SKILL_PATH = path.join(PROJECT_ROOT, "skills", "rescue", "SKILL.md");
 const REVIEW_SKILL_PATH = path.join(PROJECT_ROOT, "skills", "review", "SKILL.md");
@@ -48,12 +48,12 @@ it("requires the codex CLI when E2E runs in CI", (t) => {
   t.skip("codex CLI is not available in this environment");
 });
 
-function createFakeClaudeBinary(binDir, logFile) {
-  const claudePath = path.join(binDir, "claude");
+function createFakeAgyBinary(binDir, logFile) {
+  const agyPath = path.join(binDir, "agy");
   const source = `#!/usr/bin/env node
 const fs = require("node:fs");
 const args = process.argv.slice(2);
-const logFile = process.env.FAKE_CLAUDE_LOG;
+const logFile = process.env.FAKE_AGY_LOG;
 
 function getValue(flag) {
   const index = args.indexOf(flag);
@@ -67,45 +67,28 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function readStdin() {
-  let body = "";
-  process.stdin.setEncoding("utf8");
-  for await (const chunk of process.stdin) {
-    body += chunk;
-  }
-  return body;
-}
-
 async function main() {
   if (args[0] === "--version") {
-    process.stdout.write("2.1.90 (Claude Code)\\n");
+    process.stdout.write("1.1.28 (agylocal)\\n");
     return;
   }
 
-  if (args[0] === "auth" && args[1] === "status") {
-    process.stdout.write("authenticated\\n");
-    return;
-  }
-
-  if (args[0] !== "-p") {
+  if (!args.includes("--output-format")) {
     process.stderr.write("unexpected arguments: " + JSON.stringify(args) + "\\n");
     process.exitCode = 2;
     return;
   }
 
-  const promptIndex = args.lastIndexOf("--");
-  const prompt = promptIndex >= 0 ? args.slice(promptIndex + 1).join(" ") : await readStdin();
+  const promptArg = args.at(-1);
+  const prompt = (promptArg ?? "").replace(/^-p=/, "");
   const delayMatch = prompt.match(/\\bdelay=(\\d+)\\b/);
   const delay = delayMatch ? Number(delayMatch[1]) : 25;
-  const sessionId =
-    getValue("--resume") ||
-    getValue("--session-id") ||
-    "stub-session";
+  const conversationId = getValue("--conversation") || "stub-conversation";
 
   if (logFile) {
     fs.appendFileSync(
       logFile,
-      JSON.stringify({ args, prompt, sessionId }) + "\\n",
+      JSON.stringify({ args, prompt, conversationId }) + "\\n",
       "utf8"
     );
   }
@@ -113,27 +96,27 @@ async function main() {
   const resultText = prompt.includes("multiline")
     ? ["completed:" + prompt, "Finding 1", "Finding 2", "Finding 3"].join("\\n")
     : "completed:" + prompt;
-
-  process.stdout.write(
-    JSON.stringify({
-      type: "stream_event",
-      session_id: sessionId,
-      event: {
-        delta: {
-          type: "text_delta",
-          text: resultText,
-        },
-      },
-    }) + "\\n"
-  );
+  const jsonSchema = getValue("--json-schema");
+  const response = jsonSchema
+    ? JSON.stringify({
+        verdict: "approve",
+        summary: "Structured output path works.",
+        findings: [],
+        next_steps: [],
+      })
+    : resultText;
 
   await sleep(delay);
 
   process.stdout.write(
     JSON.stringify({
-      type: "result",
-      session_id: sessionId,
-      result: resultText,
+      conversation_id: conversationId,
+      status: "SUCCESS",
+      response,
+      error: "",
+      duration_seconds: delay / 1000,
+      num_turns: 1,
+      usage: {},
     }) + "\\n"
   );
 }
@@ -144,8 +127,8 @@ main().catch((error) => {
 });
 `;
 
-  fs.writeFileSync(claudePath, source, "utf8");
-  fs.chmodSync(claudePath, 0o755);
+  fs.writeFileSync(agyPath, source, "utf8");
+  fs.chmodSync(agyPath, 0o755);
 }
 
 function createEnvironment() {
@@ -154,25 +137,33 @@ function createEnvironment() {
   const codexHome = path.join(homeDir, ".codex");
   const binDir = path.join(rootDir, "bin");
   const outputFile = path.join(rootDir, "last-message.txt");
-  const claudeLogFile = path.join(rootDir, "fake-claude.ndjson");
+  const agyLogFile = path.join(rootDir, "fake-agy.ndjson");
 
   fs.mkdirSync(homeDir, { recursive: true });
   fs.mkdirSync(codexHome, { recursive: true });
   fs.mkdirSync(binDir, { recursive: true });
-  createFakeClaudeBinary(binDir, claudeLogFile);
+  // agy auth state under ~/.gemini so the companion's auth check passes.
+  fs.mkdirSync(path.join(homeDir, ".gemini", "antigravity-cli"), { recursive: true });
+  fs.writeFileSync(
+    path.join(homeDir, ".gemini", "antigravity-cli", "settings.json"),
+    JSON.stringify({ account: "test@example.com" }, null, 2) + "\n",
+    "utf8"
+  );
+  createFakeAgyBinary(binDir, agyLogFile);
 
   return {
     rootDir,
     homeDir,
     codexHome,
     outputFile,
-    claudeLogFile,
+    agyLogFile,
     env: {
       ...process.env,
       CODEX_HOME: codexHome,
       HOME: homeDir,
       USERPROFILE: homeDir,
-      FAKE_CLAUDE_LOG: claudeLogFile,
+      FAKE_AGY_LOG: agyLogFile,
+      AGY_PLUGIN_CODEX_AGY_BIN: path.join(binDir, "agy"),
       PATH: `${binDir}${path.delimiter}${process.env.PATH || ""}`,
     },
   };
@@ -197,7 +188,7 @@ function installHooks(testEnv) {
 
 function createLocalMarketplaceFixture(testEnv) {
   const marketplaceRoot = path.join(testEnv.rootDir, "sendbird-marketplace");
-  const pluginRoot = path.join(marketplaceRoot, "plugins", "cc");
+  const pluginRoot = path.join(marketplaceRoot, "plugins", "agy");
   fs.rmSync(marketplaceRoot, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(pluginRoot), { recursive: true });
   fs.cpSync(PROJECT_ROOT, pluginRoot, {
@@ -221,10 +212,10 @@ function createLocalMarketplaceFixture(testEnv) {
         interface: { displayName: "Sendbird Plugins" },
         plugins: [
           {
-            name: "cc",
+            name: "agy",
             source: {
               source: "local",
-              path: "./plugins/cc",
+              path: "./plugins/agy",
             },
             policy: {
               installation: "AVAILABLE",
@@ -248,15 +239,15 @@ function installPlugin(testEnv) {
     cwd: PROJECT_ROOT,
     env: {
       ...testEnv.env,
-      CC_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
-      CC_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
+      AGY_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
+      AGY_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",
     },
     encoding: "utf8",
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
 
-  const cacheParent = path.join(testEnv.codexHome, "plugins", "cache", "sendbird", "cc");
+  const cacheParent = path.join(testEnv.codexHome, "plugins", "cache", "sendbird", "agy");
   const configFile = path.join(testEnv.codexHome, "config.toml");
   const cacheDir = fs.existsSync(cacheParent)
     ? fs
@@ -330,8 +321,8 @@ rl.on("line", (line) => {
 
   return {
     env: {
-      CC_PLUGIN_CODEX_EXECUTABLE: process.execPath,
-      CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([scriptPath, logPath]),
+      AGY_PLUGIN_CODEX_EXECUTABLE: process.execPath,
+      AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([scriptPath, logPath]),
     },
     logPath,
   };
@@ -384,7 +375,7 @@ function buildRescuePrompt(userRequest) {
   const skillBody = fs.readFileSync(RESCUE_SKILL_PATH, "utf8").trim();
   return [
     "<skill>",
-    "<name>cc:rescue</name>",
+    "<name>agy:rescue</name>",
     `<path>${RESCUE_SKILL_PATH}</path>`,
     skillBody,
     "</skill>",
@@ -789,7 +780,7 @@ function startMockProvider({
   taskPrompt,
   userRequest,
   mode = "builtin-default",
-  skillTitle = "Claude Code Rescue",
+  skillTitle = "Antigravity Rescue",
   expectedParentNeedles = [],
   taskCommand: taskCommandOverride = null,
   expectedChildNeedles = [],
@@ -883,14 +874,14 @@ function startMockProvider({
             reasoning_effort: "medium",
             message:
               spawnMessage ??
-              "You are a transient forwarding worker for Claude Code rescue.\n" +
+              "You are a transient forwarding worker for Antigravity rescue.\n" +
               "Run exactly one shell command.\n" +
               "Run that command as one blocking foreground shell-tool call, not as a background terminal or session.\n" +
               "Do not request a shell session id, poll a shell session later, or return before the command exits.\n" +
               "If the shell tool is exec_command, call it once in non-interactive mode and wait for exit in that same call.\n" +
-              "Use sandbox_permissions: \"require_escalated\" with a justification that allows the Claude Code companion to contact the Claude API. Do not first try the companion command in the default network-disabled sandbox.\n" +
+              "Use sandbox_permissions: \"require_escalated\" with a justification that allows the Antigravity companion to contact the Antigravity API. Do not first try the companion command in the default network-disabled sandbox.\n" +
               "Return only that command's stdout text exactly.\n" +
-              "Ignore stderr progress chatter such as [cc] lines.\n" +
+              "Ignore stderr progress chatter such as [agy] lines.\n" +
               "If the tool output includes both stderr progress and a final stdout-style result, preserve only the final stdout-equivalent result text.\n" +
               "Do not trim, normalize, add punctuation, or add commentary.\n" +
               "Do not drop prefixes like completed: or strip a leading slash command.\n" +
@@ -936,7 +927,7 @@ function startMockProvider({
               "built-in child should be told how to use exec_command without backgrounding"
             );
             assert.ok(
-              bodyText.includes("transient forwarding worker for Claude Code rescue"),
+              bodyText.includes("transient forwarding worker for Antigravity rescue"),
               "built-in child should receive the stricter forwarding contract"
             );
             assert.ok(
@@ -944,7 +935,7 @@ function startMockProvider({
               "built-in child should be told to preserve stdout exactly"
             );
             assert.ok(
-              bodyText.includes("Ignore stderr progress chatter such as [cc] lines."),
+              bodyText.includes("Ignore stderr progress chatter such as [agy] lines."),
               "built-in child should be told to ignore stderr progress chatter"
             );
             assert.ok(
@@ -966,10 +957,10 @@ function startMockProvider({
           }
           assert.ok(
             bodyText.includes("sandbox_permissions") && bodyText.includes("require_escalated"),
-            "built-in child should request targeted escalation for Claude API access"
+            "built-in child should request targeted escalation for Antigravity API access"
           );
           assert.ok(
-            bodyText.includes("contact the Claude API"),
+            bodyText.includes("contact the Antigravity API"),
             "built-in child should receive a scoped network justification"
           );
           assert.ok(
@@ -978,7 +969,7 @@ function startMockProvider({
           );
           assert.doesNotMatch(
             bodyText,
-            /claude-companion\.mjs"\s+task\s+--background|claude-companion\.mjs"\s+task\s+--wait|claude-companion\.mjs\s+task\s+--background|claude-companion\.mjs\s+task\s+--wait/,
+            /agy-companion\.mjs"\s+task\s+--background|agy-companion\.mjs"\s+task\s+--wait|agy-companion\.mjs\s+task\s+--background|agy-companion\.mjs\s+task\s+--wait/,
             "spawned child turn must not turn parent execution flags into companion task flags"
           );
           for (const needle of expectedChildNeedles) {
@@ -1189,7 +1180,7 @@ function runCodexExec(testEnv, prompt, options = {}) {
   });
 }
 
-function readClaudeInvocations(logFile) {
+function readAgyInvocations(logFile) {
   if (!fs.existsSync(logFile)) {
     return [];
   }
@@ -1202,7 +1193,7 @@ function readClaudeInvocations(logFile) {
 }
 
 describe("Codex rescue-skill E2E", () => {
-  it("routes $cc:rescue through the built-in rescue subagent, the companion task runtime, and the fake Claude CLI", async (t) => {
+  it("routes $agy:rescue through the built-in rescue subagent, the companion task runtime, and the fake agy CLI", async (t) => {
     if (!codexAvailable()) {
       t.skip("codex CLI is not available in this environment");
       return;
@@ -1210,7 +1201,7 @@ describe("Codex rescue-skill E2E", () => {
 
     const testEnv = createEnvironment();
     const taskPrompt = "codex-rescue-e2e foreground delay=10";
-    const userRequest = "$cc:rescue --wait say hello from codex e2e";
+    const userRequest = "$agy:rescue --wait say hello from codex e2e";
     const provider = startMockProvider({
       taskPrompt,
       userRequest,
@@ -1249,14 +1240,14 @@ describe("Codex rescue-skill E2E", () => {
       const finalMessage = fs.readFileSync(testEnv.outputFile, "utf8").trim();
       assert.equal(finalMessage, `completed:${taskPrompt}`);
 
-      const claudeInvocations = readClaudeInvocations(testEnv.claudeLogFile);
+      const agyInvocations = readAgyInvocations(testEnv.agyLogFile);
       assert.ok(
-        claudeInvocations.length >= 1,
-        "fake Claude CLI should be invoked at least once"
+        agyInvocations.length >= 1,
+        "fake agy CLI should be invoked at least once"
       );
       assert.ok(
-        claudeInvocations.some((entry) => entry.prompt === taskPrompt),
-        `expected fake Claude invocation for prompt ${taskPrompt}`
+        agyInvocations.some((entry) => entry.prompt === taskPrompt),
+        `expected fake agy invocation for prompt ${taskPrompt}`
       );
 
       const acceptedPhaseSequences = [
@@ -1275,7 +1266,7 @@ describe("Codex rescue-skill E2E", () => {
     }
   });
 
-  it("defaults $cc:rescue without execution flags to the foreground companion path", async (t) => {
+  it("defaults $agy:rescue without execution flags to the foreground companion path", async (t) => {
     if (!codexAvailable()) {
       t.skip("codex CLI is not available in this environment");
       return;
@@ -1283,7 +1274,7 @@ describe("Codex rescue-skill E2E", () => {
 
     const testEnv = createEnvironment();
     const taskPrompt = "codex-rescue-e2e default-foreground delay=10";
-    const userRequest = "$cc:rescue say hello from codex e2e without flags";
+    const userRequest = "$agy:rescue say hello from codex e2e without flags";
     const provider = startMockProvider({
       taskPrompt,
       userRequest,
@@ -1322,10 +1313,10 @@ describe("Codex rescue-skill E2E", () => {
       const finalMessage = fs.readFileSync(testEnv.outputFile, "utf8").trim();
       assert.equal(finalMessage, `completed:${taskPrompt}`);
 
-      const claudeInvocations = readClaudeInvocations(testEnv.claudeLogFile);
+      const agyInvocations = readAgyInvocations(testEnv.agyLogFile);
       assert.ok(
-        claudeInvocations.some((entry) => entry.prompt === taskPrompt),
-        `expected fake Claude invocation for prompt ${taskPrompt}`
+        agyInvocations.some((entry) => entry.prompt === taskPrompt),
+        `expected fake agy invocation for prompt ${taskPrompt}`
       );
     } finally {
       await provider.close();
@@ -1342,8 +1333,8 @@ describe("Codex rescue-skill E2E", () => {
     const testEnv = createEnvironment();
     const reservedJobId = "task-background-steer-123";
     const taskPrompt = "codex-rescue-e2e background-notify delay=10";
-    const userRequest = "$cc:rescue --background say hello from codex e2e in background";
-    const notificationMessage = `Background Claude Code rescue finished. Open it with $cc:result ${reservedJobId}.`;
+    const userRequest = "$agy:rescue --background say hello from codex e2e in background";
+    const notificationMessage = `Background Antigravity rescue finished. Open it with $agy:result ${reservedJobId}.`;
     const provider = startMockProvider({
       taskPrompt,
       userRequest,
@@ -1394,7 +1385,7 @@ describe("Codex rescue-skill E2E", () => {
 
     const testEnv = createEnvironment();
     const taskPrompt = "codex-rescue-e2e multiline delay=10";
-    const userRequest = "$cc:rescue --wait /simplify";
+    const userRequest = "$agy:rescue --wait /simplify";
     const provider = startMockProvider({
       taskPrompt,
       userRequest,
@@ -1435,7 +1426,7 @@ describe("Codex rescue-skill E2E", () => {
 
     const testEnv = createEnvironment();
     const taskPrompt = "codex-rescue-e2e builtin-agent delay=10";
-    const userRequest = "$cc:rescue --builtin-agent --wait say hello from codex e2e";
+    const userRequest = "$agy:rescue --builtin-agent --wait say hello from codex e2e";
     const provider = startMockProvider({
       taskPrompt,
       userRequest,
@@ -1473,10 +1464,10 @@ describe("Codex rescue-skill E2E", () => {
       const finalMessage = fs.readFileSync(testEnv.outputFile, "utf8").trim();
       assert.equal(finalMessage, `completed:${taskPrompt}`);
 
-      const claudeInvocations = readClaudeInvocations(testEnv.claudeLogFile);
+      const agyInvocations = readAgyInvocations(testEnv.agyLogFile);
       assert.ok(
-        claudeInvocations.some((entry) => entry.prompt === taskPrompt),
-        `expected fake Claude invocation for prompt ${taskPrompt}`
+        agyInvocations.some((entry) => entry.prompt === taskPrompt),
+        `expected fake agy invocation for prompt ${taskPrompt}`
       );
     } finally {
       await provider.close();
@@ -1492,7 +1483,7 @@ describe("Codex rescue-skill E2E", () => {
 
     const testEnv = createEnvironment();
     const initialTaskPrompt = "codex-rescue-e2e builtin-agent initial delay=10";
-    const initialRequest = "$cc:rescue --builtin-agent --wait say hello from codex e2e";
+    const initialRequest = "$agy:rescue --builtin-agent --wait say hello from codex e2e";
     let provider = startMockProvider({
       taskPrompt: initialTaskPrompt,
       userRequest: initialRequest,
@@ -1526,7 +1517,7 @@ describe("Codex rescue-skill E2E", () => {
 
     const followupTaskPrompt = "only fix the quoting issue and keep everything else";
     const followupRequest =
-      "$cc:rescue --builtin-agent --wait --resume only fix the quoting issue and keep everything else";
+      "$agy:rescue --builtin-agent --wait --resume only fix the quoting issue and keep everything else";
     provider = startMockProvider({
       taskPrompt: followupTaskPrompt,
       userRequest: followupRequest,
@@ -1560,13 +1551,13 @@ describe("Codex rescue-skill E2E", () => {
       const finalMessage = fs.readFileSync(testEnv.outputFile, "utf8").trim();
       assert.equal(finalMessage, `completed:${followupTaskPrompt}`);
 
-      const claudeInvocations = readClaudeInvocations(testEnv.claudeLogFile);
+      const agyInvocations = readAgyInvocations(testEnv.agyLogFile);
       assert.ok(
-        claudeInvocations.some(
+        agyInvocations.some(
           (entry) =>
-            entry.prompt === followupTaskPrompt && entry.sessionId === "stub-session"
+            entry.prompt === followupTaskPrompt && entry.conversationId === "stub-conversation"
         ),
-        "expected follow-up built-in rescue to resume the stub Claude session with the delta prompt"
+        "expected follow-up built-in rescue to resume the stub agy conversation with the delta prompt"
       );
     } finally {
       await provider.close();
@@ -1578,36 +1569,36 @@ describe("Codex rescue-skill E2E", () => {
     {
       name: "a slash-style rescue request",
       taskPrompt: "/simplify make the output compact",
-      userRequest: "$cc:rescue --builtin-agent --wait /simplify make the output compact",
+      userRequest: "$agy:rescue --builtin-agent --wait /simplify make the output compact",
     },
     {
       name: "a quoted literal rescue request",
       taskPrompt: "return exactly 'foo \"bar\" baz'",
-      userRequest: "$cc:rescue --builtin-agent --wait return exactly 'foo \"bar\" baz'",
+      userRequest: "$agy:rescue --builtin-agent --wait return exactly 'foo \"bar\" baz'",
     },
     {
       name: "a multiline rescue request",
       taskPrompt: "output exactly:\nline 1\n\nline 2\nline 3",
       userRequest:
-        "$cc:rescue --builtin-agent --wait output exactly:\nline 1\n\nline 2\nline 3",
+        "$agy:rescue --builtin-agent --wait output exactly:\nline 1\n\nline 2\nline 3",
     },
     {
       name: "a mixed-language rescue request",
       taskPrompt: "한국어 2줄 + English 1 line 형식으로 답해줘",
       userRequest:
-        "$cc:rescue --builtin-agent --wait 한국어 2줄 + English 1 line 형식으로 답해줘",
+        "$agy:rescue --builtin-agent --wait 한국어 2줄 + English 1 line 형식으로 답해줘",
     },
     {
       name: "a follow-up style rescue request",
       taskPrompt: "keep going from the last fix and make it clean",
       userRequest:
-        "$cc:rescue --builtin-agent --wait keep going from the last fix and make it clean",
+        "$agy:rescue --builtin-agent --wait keep going from the last fix and make it clean",
     },
     {
       name: "an ambiguous rescue request",
       taskPrompt: "take care of the thing from earlier",
       userRequest:
-        "$cc:rescue --builtin-agent --wait take care of the thing from earlier",
+        "$agy:rescue --builtin-agent --wait take care of the thing from earlier",
     },
   ]) {
     it(`preserves ${scenario.name} through the experimental built-in path`, async (t) => {
@@ -1646,16 +1637,16 @@ describe("Codex rescue-skill E2E", () => {
         const finalMessage = fs.readFileSync(testEnv.outputFile, "utf8").trim();
         assert.equal(finalMessage, `completed:${scenario.taskPrompt}`);
 
-        const claudeInvocations = readClaudeInvocations(testEnv.claudeLogFile);
+        const agyInvocations = readAgyInvocations(testEnv.agyLogFile);
         if (scenario.taskPrompt.includes("\n")) {
           assert.ok(
-            claudeInvocations.length >= 1,
-            "expected at least one fake Claude invocation for multiline prompt coverage"
+            agyInvocations.length >= 1,
+            "expected at least one fake agy invocation for multiline prompt coverage"
           );
         } else {
           assert.ok(
-            claudeInvocations.some((entry) => entry.prompt === scenario.taskPrompt),
-            `expected fake Claude invocation for prompt ${JSON.stringify(scenario.taskPrompt)}`
+            agyInvocations.some((entry) => entry.prompt === scenario.taskPrompt),
+            `expected fake agy invocation for prompt ${JSON.stringify(scenario.taskPrompt)}`
           );
         }
       } finally {
@@ -1667,7 +1658,7 @@ describe("Codex rescue-skill E2E", () => {
 });
 
 describe("Codex direct-skill E2E", () => {
-  it("uses the installed plugin review skill without running $cc:setup first", async (t) => {
+  it("uses the installed plugin review skill without running $agy:setup first", async (t) => {
     if (!codexAvailable()) {
       t.skip("codex CLI is not available in this environment");
       return;
@@ -1685,13 +1676,13 @@ describe("Codex direct-skill E2E", () => {
 
     const pluginRoot = installPlugin(testEnv);
 
-    const userRequest = "$cc:review --wait --scope working-tree --model haiku";
-    const companionScript = path.join(pluginRoot, "scripts", "claude-companion.mjs");
+    const userRequest = "$agy:review --wait --scope working-tree --model flash-high";
+    const companionScript = path.join(pluginRoot, "scripts", "agy-companion.mjs");
     const provider = startDirectSkillProvider({
       userRequest,
-      expectedNeedles: ["Claude Code Review"],
+      expectedNeedles: ["Antigravity Review"],
       shellCommands: [
-        `node ${JSON.stringify(companionScript)} review --view-state on-success --scope working-tree --model haiku`,
+        `node ${JSON.stringify(companionScript)} review --view-state on-success --scope working-tree --model flash-high`,
       ],
       cwd: workspaceDir,
     });
@@ -1703,14 +1694,14 @@ describe("Codex direct-skill E2E", () => {
 
       assert.equal(execResult.status, 0, execResult.stderr || execResult.stdout);
       const finalMessage = fs.readFileSync(testEnv.outputFile, "utf8");
-      assert.match(finalMessage, /Claude Code Review/);
+      assert.match(finalMessage, /Antigravity Review/);
 
-      const claudeInvocations = readClaudeInvocations(testEnv.claudeLogFile);
+      const agyInvocations = readAgyInvocations(testEnv.agyLogFile);
       assert.ok(
-        claudeInvocations.some(
-          (entry) => entry.args.includes("--model") && entry.args.includes("haiku")
+        agyInvocations.some(
+          (entry) => entry.args.includes("--model") && entry.args.includes("gemini-3.8-flash-high")
         ),
-        "installed plugin review should forward the requested model alias to Claude without running setup first"
+        "installed plugin review should forward the requested model alias to agy without running setup first"
       );
     } finally {
       await provider.close();
@@ -1718,7 +1709,7 @@ describe("Codex direct-skill E2E", () => {
     }
   });
 
-  it("routes $cc:review --wait through the companion review command with forwarded scope and model", async (t) => {
+  it("routes $agy:review --wait through the companion review command with forwarded scope and model", async (t) => {
     if (!codexAvailable()) {
       t.skip("codex CLI is not available in this environment");
       return;
@@ -1734,12 +1725,12 @@ describe("Codex direct-skill E2E", () => {
       "utf8"
     );
 
-    const userRequest = "$cc:review --wait --scope working-tree --model haiku";
+    const userRequest = "$agy:review --wait --scope working-tree --model flash-high";
     const provider = startDirectSkillProvider({
       userRequest,
-      expectedNeedles: ["Claude Code Review"],
+      expectedNeedles: ["Antigravity Review"],
       shellCommands: [
-        `node ${JSON.stringify(COMPANION_SCRIPT)} review --view-state on-success --scope working-tree --model haiku`,
+        `node ${JSON.stringify(COMPANION_SCRIPT)} review --view-state on-success --scope working-tree --model flash-high`,
       ],
       cwd: workspaceDir,
     });
@@ -1750,17 +1741,17 @@ describe("Codex direct-skill E2E", () => {
     try {
       const execResult = await runCodexExec(
         testEnv,
-        buildSkillPrompt("cc:review", REVIEW_SKILL_PATH, userRequest),
+        buildSkillPrompt("agy:review", REVIEW_SKILL_PATH, userRequest),
         { cwd: workspaceDir }
       );
 
       assert.equal(execResult.status, 0, execResult.stderr || execResult.stdout);
       const finalMessage = fs.readFileSync(testEnv.outputFile, "utf8");
-      assert.match(finalMessage, /Claude Code Review/);
-      const claudeInvocations = readClaudeInvocations(testEnv.claudeLogFile);
+      assert.match(finalMessage, /Antigravity Review/);
+      const agyInvocations = readAgyInvocations(testEnv.agyLogFile);
       assert.ok(
-        claudeInvocations.some((entry) => entry.args.includes("--model") && entry.args.includes("haiku")),
-        "review e2e should forward the requested model alias to Claude"
+        agyInvocations.some((entry) => entry.args.includes("--model") && entry.args.includes("gemini-3.8-flash-high")),
+        "review e2e should forward the requested model alias to agy"
       );
     } finally {
       await provider.close();
@@ -1768,7 +1759,7 @@ describe("Codex direct-skill E2E", () => {
     }
   });
 
-  it("routes $cc:review --background through the built-in path with notification steering", async (t) => {
+  it("routes $agy:review --background through the built-in path with notification steering", async (t) => {
     if (!codexAvailable()) {
       t.skip("codex CLI is not available in this environment");
       return;
@@ -1786,13 +1777,13 @@ describe("Codex direct-skill E2E", () => {
 
     const reservedJobId = "review-background-steer-123";
     const ownerSessionId = "parent-review-session";
-    const userRequest = "$cc:review --background --scope working-tree --model haiku";
+    const userRequest = "$agy:review --background --scope working-tree --model flash-high";
     const notificationMessage =
-      `Background Claude Code review finished. Open it with $cc:result ${reservedJobId}.`;
+      `Background Antigravity review finished. Open it with $agy:result ${reservedJobId}.`;
     const provider = startMockProvider({
       taskPrompt: "background review raw output should not surface",
       userRequest,
-      skillTitle: "Claude Code Review",
+      skillTitle: "Antigravity Review",
       expectedParentNeedles: [
         "background-routing-context --kind review --json",
         "--owner-session-id <owner-session-id>",
@@ -1803,10 +1794,10 @@ describe("Codex direct-skill E2E", () => {
         "allow one extra `send_input` call after a successful shell result",
         "must target the provided parent thread id",
         "do not silently drop the completion notification path from the child prompt",
-        "Background Claude Code review finished. Open it with $cc:result <reserved-job-id>.",
+        "Background Antigravity review finished. Open it with $agy:result <reserved-job-id>.",
       ],
       taskCommand:
-        `node ${JSON.stringify(COMPANION_SCRIPT)} review --view-state defer --scope working-tree --model haiku --job-id ${JSON.stringify(reservedJobId)} --owner-session-id ${JSON.stringify(ownerSessionId)}`,
+        `node ${JSON.stringify(COMPANION_SCRIPT)} review --view-state defer --scope working-tree --model flash-high --job-id ${JSON.stringify(reservedJobId)} --owner-session-id ${JSON.stringify(ownerSessionId)}`,
       expectedChildNeedles: [
         "--view-state defer",
         "--job-id",
@@ -1819,18 +1810,18 @@ describe("Codex direct-skill E2E", () => {
       notificationMessage,
       childPromptChecks: "generic",
       spawnMessage:
-        "You are a pure forwarder for a background Claude Code review job.\n" +
+        "You are a pure forwarder for a background Antigravity review job.\n" +
         "Do not inspect the repo, do not review anything yourself, and do not add commentary.\n" +
-        "Run exactly one shell command and capture only the stdout-equivalent final result text from that command, ignoring stderr progress chatter like [cc] lines.\n" +
+        "Run exactly one shell command and capture only the stdout-equivalent final result text from that command, ignoring stderr progress chatter like [agy] lines.\n" +
         "Run that command as one blocking foreground shell-tool call, not as a background terminal or session.\n" +
         "Do not request a shell session id, poll a shell session later, or return before the command exits.\n" +
         "If the shell tool is exec_command, call it once in non-interactive mode and wait for exit in that same call.\n" +
-        "Use sandbox_permissions: \"require_escalated\" with the justification Allow the Claude Code companion to contact the Claude API for this requested review. Do not first try the companion command in the default network-disabled sandbox.\n" +
+        "Use sandbox_permissions: \"require_escalated\" with the justification Allow the Antigravity companion to contact the Antigravity API for this requested review. Do not first try the companion command in the default network-disabled sandbox.\n" +
         "If the command succeeds and a parent thread id is available, send exactly this notification to the parent thread before finishing: " +
         JSON.stringify(notificationMessage) + "\n" +
         "Use that same sentence as your own final assistant message.\n" +
         "If the command fails, return only the command stdout if any, otherwise a terse failure note.\n\n" +
-        `node ${JSON.stringify(COMPANION_SCRIPT)} review --view-state defer --scope working-tree --model haiku --job-id ${JSON.stringify(reservedJobId)} --owner-session-id ${JSON.stringify(ownerSessionId)}`,
+        `node ${JSON.stringify(COMPANION_SCRIPT)} review --view-state defer --scope working-tree --model flash-high --job-id ${JSON.stringify(reservedJobId)} --owner-session-id ${JSON.stringify(ownerSessionId)}`,
     });
     testEnv.providerPort = await provider.listen();
     installHooks(testEnv);
@@ -1839,7 +1830,7 @@ describe("Codex direct-skill E2E", () => {
     try {
       const execResult = await runCodexExec(
         testEnv,
-        buildSkillPrompt("cc:review", REVIEW_SKILL_PATH, userRequest),
+        buildSkillPrompt("agy:review", REVIEW_SKILL_PATH, userRequest),
         { cwd: workspaceDir }
       );
 
@@ -1863,7 +1854,7 @@ describe("Codex direct-skill E2E", () => {
     }
   });
 
-  it("routes $cc:adversarial-review --wait through the companion command with focus text", async (t) => {
+  it("routes $agy:adversarial-review --wait through the companion command with focus text", async (t) => {
     if (!codexAvailable()) {
       t.skip("codex CLI is not available in this environment");
       return;
@@ -1880,12 +1871,12 @@ describe("Codex direct-skill E2E", () => {
     );
 
     const userRequest =
-      "$cc:adversarial-review --wait --scope working-tree --model haiku focus on race conditions";
+      "$agy:adversarial-review --wait --scope working-tree --model flash-high focus on race conditions";
     const provider = startDirectSkillProvider({
       userRequest,
-      expectedNeedles: ["Claude Code Adversarial Review"],
+      expectedNeedles: ["Antigravity Adversarial Review"],
       shellCommands: [
-        `node ${JSON.stringify(COMPANION_SCRIPT)} adversarial-review --view-state on-success --scope working-tree --model haiku focus on race conditions`,
+        `node ${JSON.stringify(COMPANION_SCRIPT)} adversarial-review --view-state on-success --scope working-tree --model flash-high focus on race conditions`,
       ],
       cwd: workspaceDir,
     });
@@ -1897,7 +1888,7 @@ describe("Codex direct-skill E2E", () => {
       const execResult = await runCodexExec(
         testEnv,
         buildSkillPrompt(
-          "cc:adversarial-review",
+          "agy:adversarial-review",
           ADVERSARIAL_REVIEW_SKILL_PATH,
           userRequest
         ),
@@ -1907,10 +1898,10 @@ describe("Codex direct-skill E2E", () => {
       assert.equal(execResult.status, 0, execResult.stderr || execResult.stdout);
       const finalMessage = fs.readFileSync(testEnv.outputFile, "utf8");
       assert.match(finalMessage, /Adversarial Review/);
-      const claudeInvocations = readClaudeInvocations(testEnv.claudeLogFile);
+      const agyInvocations = readAgyInvocations(testEnv.agyLogFile);
       assert.ok(
-        claudeInvocations.some((entry) => entry.prompt.includes("focus on race conditions")),
-        "adversarial review e2e should preserve the user focus text in the Claude prompt"
+        agyInvocations.some((entry) => entry.prompt.includes("focus on race conditions")),
+        "adversarial review e2e should preserve the user focus text in the agy prompt"
       );
     } finally {
       await provider.close();
@@ -1935,16 +1926,16 @@ describe("Codex direct-skill E2E", () => {
     );
 
     const userRequest =
-      "$cc:review --wait --scope working-tree --model haiku focus on race conditions";
+      "$agy:review --wait --scope working-tree --model flash-high focus on race conditions";
     const provider = startDirectSkillProvider({
       userRequest,
       expectedNeedles: [
-        "`$cc:review` does not accept custom focus text",
-        "Unlike `$cc:review`, this skill accepts custom focus text after the flags",
-        "keep the delegated Claude part on `$cc:review`",
+        "`$agy:review` does not accept custom focus text",
+        "Unlike `$agy:review`, this skill accepts custom focus text after the flags",
+        "keep the delegated Antigravity part on `$agy:review`",
       ],
       shellCommands: [
-        `node ${JSON.stringify(COMPANION_SCRIPT)} adversarial-review --view-state on-success --scope working-tree --model haiku focus on race conditions`,
+        `node ${JSON.stringify(COMPANION_SCRIPT)} adversarial-review --view-state on-success --scope working-tree --model flash-high focus on race conditions`,
       ],
       cwd: workspaceDir,
     });
@@ -1957,8 +1948,8 @@ describe("Codex direct-skill E2E", () => {
         testEnv,
         buildMultiSkillPrompt(
           [
-            { name: "cc:review", path: REVIEW_SKILL_PATH },
-            { name: "cc:adversarial-review", path: ADVERSARIAL_REVIEW_SKILL_PATH },
+            { name: "agy:review", path: REVIEW_SKILL_PATH },
+            { name: "agy:adversarial-review", path: ADVERSARIAL_REVIEW_SKILL_PATH },
           ],
           userRequest
         ),
@@ -1969,9 +1960,9 @@ describe("Codex direct-skill E2E", () => {
       const finalMessage = fs.readFileSync(testEnv.outputFile, "utf8");
       assert.match(finalMessage, /Adversarial Review/);
 
-      const claudeInvocations = readClaudeInvocations(testEnv.claudeLogFile);
+      const agyInvocations = readAgyInvocations(testEnv.agyLogFile);
       assert.ok(
-        claudeInvocations.some((entry) => entry.prompt.includes("focus on race conditions")),
+        agyInvocations.some((entry) => entry.prompt.includes("focus on race conditions")),
         "focus-routing e2e should preserve the user focus text when the adversarial path is selected"
       );
     } finally {
@@ -1980,7 +1971,7 @@ describe("Codex direct-skill E2E", () => {
     }
   });
 
-  it("routes $cc:adversarial-review --background through the built-in path with notification steering", async (t) => {
+  it("routes $agy:adversarial-review --background through the built-in path with notification steering", async (t) => {
     if (!codexAvailable()) {
       t.skip("codex CLI is not available in this environment");
       return;
@@ -1999,13 +1990,13 @@ describe("Codex direct-skill E2E", () => {
     const reservedJobId = "adversarial-background-steer-123";
     const ownerSessionId = "parent-adversarial-session";
     const userRequest =
-      "$cc:adversarial-review --background --scope working-tree --model haiku focus on race conditions";
+      "$agy:adversarial-review --background --scope working-tree --model flash-high focus on race conditions";
     const notificationMessage =
-      `Background Claude Code adversarial review finished. Open it with $cc:result ${reservedJobId}.`;
+      `Background Antigravity adversarial review finished. Open it with $agy:result ${reservedJobId}.`;
     const provider = startMockProvider({
       taskPrompt: "background adversarial review raw output should not surface",
       userRequest,
-      skillTitle: "Claude Code Adversarial Review",
+      skillTitle: "Antigravity Adversarial Review",
       expectedParentNeedles: [
         "background-routing-context --kind review --json",
         "--owner-session-id <owner-session-id>",
@@ -2016,10 +2007,10 @@ describe("Codex direct-skill E2E", () => {
         "allow one extra `send_input` call after a successful shell result",
         "must target the provided parent thread id",
         "do not silently drop the completion notification path from the child prompt",
-        "Background Claude Code adversarial review finished. Open it with $cc:result <reserved-job-id>.",
+        "Background Antigravity adversarial review finished. Open it with $agy:result <reserved-job-id>.",
       ],
       taskCommand:
-        `node ${JSON.stringify(COMPANION_SCRIPT)} adversarial-review --view-state defer --scope working-tree --model haiku --job-id ${JSON.stringify(reservedJobId)} --owner-session-id ${JSON.stringify(ownerSessionId)} focus on race conditions`,
+        `node ${JSON.stringify(COMPANION_SCRIPT)} adversarial-review --view-state defer --scope working-tree --model flash-high --job-id ${JSON.stringify(reservedJobId)} --owner-session-id ${JSON.stringify(ownerSessionId)} focus on race conditions`,
       expectedChildNeedles: [
         "--view-state defer",
         "--job-id",
@@ -2033,18 +2024,18 @@ describe("Codex direct-skill E2E", () => {
       notificationMessage,
       childPromptChecks: "generic",
       spawnMessage:
-        "You are a pure forwarder for a background Claude Code adversarial review job.\n" +
+        "You are a pure forwarder for a background Antigravity adversarial review job.\n" +
         "Do not inspect the repo, do not review anything yourself, and do not add commentary.\n" +
-        "Run exactly one shell command and capture only the stdout-equivalent final result text from that command, ignoring stderr progress chatter like [cc] lines.\n" +
+        "Run exactly one shell command and capture only the stdout-equivalent final result text from that command, ignoring stderr progress chatter like [agy] lines.\n" +
         "Run that command as one blocking foreground shell-tool call, not as a background terminal or session.\n" +
         "Do not request a shell session id, poll a shell session later, or return before the command exits.\n" +
         "If the shell tool is exec_command, call it once in non-interactive mode and wait for exit in that same call.\n" +
-        "Use sandbox_permissions: \"require_escalated\" with the justification Allow the Claude Code companion to contact the Claude API for this requested review. Do not first try the companion command in the default network-disabled sandbox.\n" +
+        "Use sandbox_permissions: \"require_escalated\" with the justification Allow the Antigravity companion to contact the Antigravity API for this requested review. Do not first try the companion command in the default network-disabled sandbox.\n" +
         "If the command succeeds and a parent thread id is available, send exactly this notification to the parent thread before finishing: " +
         JSON.stringify(notificationMessage) + "\n" +
         "Use that same sentence as your own final assistant message.\n" +
         "If the command fails, return only the command stdout if any, otherwise a terse failure note.\n\n" +
-        `node ${JSON.stringify(COMPANION_SCRIPT)} adversarial-review --view-state defer --scope working-tree --model haiku --job-id ${JSON.stringify(reservedJobId)} --owner-session-id ${JSON.stringify(ownerSessionId)} focus on race conditions`,
+        `node ${JSON.stringify(COMPANION_SCRIPT)} adversarial-review --view-state defer --scope working-tree --model flash-high --job-id ${JSON.stringify(reservedJobId)} --owner-session-id ${JSON.stringify(ownerSessionId)} focus on race conditions`,
     });
     testEnv.providerPort = await provider.listen();
     installHooks(testEnv);
@@ -2054,7 +2045,7 @@ describe("Codex direct-skill E2E", () => {
       const execResult = await runCodexExec(
         testEnv,
         buildSkillPrompt(
-          "cc:adversarial-review",
+          "agy:adversarial-review",
           ADVERSARIAL_REVIEW_SKILL_PATH,
           userRequest
         ),
@@ -2081,17 +2072,17 @@ describe("Codex direct-skill E2E", () => {
     }
   });
 
-  it("routes $cc:setup --enable-review-gate through the json probe then final setup command", async (t) => {
+  it("routes $agy:setup --enable-review-gate through the json probe then final setup command", async (t) => {
     if (!codexAvailable()) {
       t.skip("codex CLI is not available in this environment");
       return;
     }
 
     const testEnv = createEnvironment();
-    const userRequest = "$cc:setup --enable-review-gate";
+    const userRequest = "$agy:setup --enable-review-gate";
     const provider = startDirectSkillProvider({
       userRequest,
-      expectedNeedles: ["Claude Code Setup"],
+      expectedNeedles: ["Antigravity Setup"],
       shellCommands: [
         `node ${JSON.stringify(COMPANION_SCRIPT)} setup --json --enable-review-gate`,
         `node ${JSON.stringify(COMPANION_SCRIPT)} setup --enable-review-gate`,
@@ -2104,7 +2095,7 @@ describe("Codex direct-skill E2E", () => {
     try {
       const execResult = await runCodexExec(
         testEnv,
-        buildSkillPrompt("cc:setup", SETUP_SKILL_PATH, userRequest)
+        buildSkillPrompt("agy:setup", SETUP_SKILL_PATH, userRequest)
       );
 
       assert.equal(execResult.status, 0, execResult.stderr || execResult.stdout);
@@ -2120,17 +2111,17 @@ describe("Codex direct-skill E2E", () => {
     }
   });
 
-  it("repairs native plugin hook feature gates during $cc:setup", async (t) => {
+  it("repairs native plugin hook feature gates during $agy:setup", async (t) => {
     if (!codexAvailable()) {
       t.skip("codex CLI is not available in this environment");
       return;
     }
 
     const testEnv = createEnvironment();
-    const userRequest = "$cc:setup";
+    const userRequest = "$agy:setup";
     const provider = startDirectSkillProvider({
       userRequest,
-      expectedNeedles: ["Claude Code Setup"],
+      expectedNeedles: ["Antigravity Setup"],
       shellCommands: [
         `node ${JSON.stringify(COMPANION_SCRIPT)} setup --json`,
         `node ${JSON.stringify(COMPANION_SCRIPT)} setup`,
@@ -2142,7 +2133,7 @@ describe("Codex direct-skill E2E", () => {
     try {
       const execResult = await runCodexExec(
         testEnv,
-        buildSkillPrompt("cc:setup", SETUP_SKILL_PATH, userRequest)
+        buildSkillPrompt("agy:setup", SETUP_SKILL_PATH, userRequest)
       );
 
       assert.equal(execResult.status, 0, execResult.stderr || execResult.stdout);
@@ -2161,17 +2152,17 @@ describe("Codex direct-skill E2E", () => {
     }
   });
 
-  it("repairs native plugin hooks during $cc:setup --enable-review-gate", async (t) => {
+  it("repairs native plugin hooks during $agy:setup --enable-review-gate", async (t) => {
     if (!codexAvailable()) {
       t.skip("codex CLI is not available in this environment");
       return;
     }
 
     const testEnv = createEnvironment();
-    const userRequest = "$cc:setup --enable-review-gate";
+    const userRequest = "$agy:setup --enable-review-gate";
     const provider = startDirectSkillProvider({
       userRequest,
-      expectedNeedles: ["Claude Code Setup"],
+      expectedNeedles: ["Antigravity Setup"],
       shellCommands: [
         `node ${JSON.stringify(COMPANION_SCRIPT)} setup --json --enable-review-gate`,
         `node ${JSON.stringify(COMPANION_SCRIPT)} setup --enable-review-gate`,
@@ -2183,7 +2174,7 @@ describe("Codex direct-skill E2E", () => {
     try {
       const execResult = await runCodexExec(
         testEnv,
-        buildSkillPrompt("cc:setup", SETUP_SKILL_PATH, userRequest)
+        buildSkillPrompt("agy:setup", SETUP_SKILL_PATH, userRequest)
       );
 
       assert.equal(execResult.status, 0, execResult.stderr || execResult.stdout);
@@ -2307,7 +2298,7 @@ describe("native hook dispatch", () => {
 
     const testEnv = createEnvironment();
     // A nested session id would make SessionStart skip the marker this asserts on.
-    delete testEnv.env.CLAUDE_COMPANION_SESSION_ID;
+    delete testEnv.env.AGY_COMPANION_SESSION_ID;
     const workspaceDir = path.join(testEnv.rootDir, "session-end-workspace");
     fs.mkdirSync(workspaceDir, { recursive: true });
     setupGitWorkspace(workspaceDir);

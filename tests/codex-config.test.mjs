@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,20 +15,20 @@ import {
   nativePluginHooksStatus,
 } from "../scripts/lib/codex-config.mjs";
 
-const originalExecutable = process.env.CC_PLUGIN_CODEX_EXECUTABLE;
-const originalArgs = process.env.CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON;
+const originalExecutable = process.env.AGY_PLUGIN_CODEX_EXECUTABLE;
+const originalArgs = process.env.AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON;
 const tempRoots = [];
 
 afterEach(() => {
   if (originalExecutable === undefined) {
-    delete process.env.CC_PLUGIN_CODEX_EXECUTABLE;
+    delete process.env.AGY_PLUGIN_CODEX_EXECUTABLE;
   } else {
-    process.env.CC_PLUGIN_CODEX_EXECUTABLE = originalExecutable;
+    process.env.AGY_PLUGIN_CODEX_EXECUTABLE = originalExecutable;
   }
   if (originalArgs === undefined) {
-    delete process.env.CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON;
+    delete process.env.AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON;
   } else {
-    process.env.CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON = originalArgs;
+    process.env.AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON = originalArgs;
   }
   for (const root of tempRoots.splice(0)) {
     fs.rmSync(root, {
@@ -149,8 +149,8 @@ rl.on("line", (line) => {
     "utf8"
   );
 
-  process.env.CC_PLUGIN_CODEX_EXECUTABLE = process.execPath;
-  process.env.CC_PLUGIN_CODEX_APP_SERVER_ARGS_JSON = JSON.stringify([serverPath]);
+  process.env.AGY_PLUGIN_CODEX_EXECUTABLE = process.execPath;
+  process.env.AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON = JSON.stringify([serverPath]);
 
   assert.equal(await ensureCodexWritableRoot(root, "/target"), true);
   assert.deepEqual(JSON.parse(fs.readFileSync(statePath, "utf8")).writableRoots, [

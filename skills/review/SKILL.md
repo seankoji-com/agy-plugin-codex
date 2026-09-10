@@ -1,24 +1,24 @@
 ---
 name: review
-description: 'Run a standard Claude Code review of local git changes in this repository. Args: --wait, --background, --base <ref>, --scope <auto|working-tree|branch>, --model <model>, --effort <low|medium|high|xhigh|max>. Defaults to opus with no forced effort. Use as the default path for ordinary code-review requests when the user did not explicitly ask for stronger adversarial scrutiny or for Claude to own the implementation work.'
+description: 'Run a standard Antigravity review of local git changes in this repository. Args: --wait, --background, --base <ref>, --scope <auto|working-tree|branch>, --model <model>, --effort <low|medium|high>. Defaults to flash-medium with no forced effort. Use as the default path for ordinary code-review requests when the user did not explicitly ask for stronger adversarial scrutiny or for the delegated model to own the implementation work.'
 ---
 
-# Claude Code Review
+# Antigravity Review
 
-Use this skill when the user wants Claude Code to review the current working tree or a branch diff in this repository.
+Use this skill when the user wants Antigravity to review the current working tree or a branch diff in this repository.
 
-Use `$cc:review` as the default when the user asks for code review, asks you to have Claude review something, or wants a second review pass without explicitly asking for stronger adversarial scrutiny.
-If the user asks for stronger challenge on design, tradeoffs, rollout risk, migration risk, configuration behavior, or provides custom review focus text, route to `$cc:adversarial-review` instead.
-If the user wants Claude Code to investigate, validate by changing code, or actually fix/implement something, route to `$cc:rescue` instead.
-If the overall request is "you review it too, also ask Claude to review in the background, then you aggregate and fix it", keep the delegated Claude part on `$cc:review` unless the user explicitly asks for a harsher or more adversarial review.
-`$cc:review` does not accept custom focus text. If the user wants to steer Claude toward a particular angle, question, subsystem, or risk area, that is a signal to use `$cc:adversarial-review` instead.
+Use `$agy:review` as the default when the user asks for code review, asks you to have the delegated model review something, or wants a second review pass without explicitly asking for stronger adversarial scrutiny.
+If the user asks for stronger challenge on design, tradeoffs, rollout risk, migration risk, configuration behavior, or provides custom review focus text, route to `$agy:adversarial-review` instead.
+If the user wants the delegated model to investigate, validate by changing code, or actually fix/implement something, route to `$agy:rescue` instead.
+If the overall request is "you review it too, also ask Antigravity to review in the background, then you aggregate and fix it", keep the delegated Antigravity part on `$agy:review` unless the user explicitly asks for a harsher or more adversarial review.
+`$agy:review` does not accept custom focus text. If the user wants to steer the review toward a particular angle, question, subsystem, or risk area, that is a signal to use `$agy:adversarial-review` instead.
 
 Resolve `<plugin-root>` as two directories above this `SKILL.md` file. Always run the companion from that active plugin root:
-`node "<plugin-root>/scripts/claude-companion.mjs" review ...`
+`node "<plugin-root>/scripts/agy-companion.mjs" review ...`
 
-Supported arguments: `--wait`, `--background`, `--base <ref>`, `--scope auto|working-tree|branch`, `--model <model>`, `--effort <low|medium|high|xhigh|max>` (defaults: model=opus and no effort; `fable`, `opus`, `sonnet`, and `haiku` each keep Claude Code's own effort default, and Claude Code owns which effort levels each model supports)
+Supported arguments: `--wait`, `--background`, `--base <ref>`, `--scope auto|working-tree|branch`, `--model <model>`, `--effort <low|medium|high>` (defaults: model=flash-medium and no effort; `flash-low`, `flash-medium`, and `flash-high` each keep Antigravity's own effort default, and Antigravity owns which effort levels each model supports)
 
-Forward `--model` unchanged to the companion. The companion trims surrounding whitespace, canonicalizes the friendly aliases `fable`, `opus`, `sonnet`, and `haiku` to lowercase, then forwards every other `--model` value unchanged to Claude Code. Claude Code owns alias resolution and supported effort levels; `/model` is the authoritative picker for the current account and provider.
+Forward `--model` unchanged to the companion. The companion trims surrounding whitespace, canonicalizes the friendly aliases `flash-low`, `flash-medium`, and `flash-high` to their catalog IDs (e.g. `gemini-3.8-flash-medium`), then forwards every other `--model` value unchanged to Antigravity. Antigravity owns alias resolution and supported effort levels; `agy models` is the authoritative catalog for the current account and provider.
 
 Raw slash-command arguments:
 `$ARGUMENTS`
@@ -28,7 +28,7 @@ Rules:
 - Before launching the review, stay in read-only inspection mode: inspect git status and diff stats only, then ask at most one user question about whether to wait or run in background.
 - Preserve the user's review scope flags exactly.
 - Do not accept staged-only or unstaged-only review modes.
-- Do not add extra review instructions or focus text. Route those requests to `$cc:adversarial-review`.
+- Do not add extra review instructions or focus text. Route those requests to `$agy:adversarial-review`.
 
 Execution mode rules:
 - If the raw arguments include `--wait`, do not ask. Run the review in the foreground.
@@ -50,28 +50,28 @@ Execution mode rules:
 Argument handling:
 - Preserve the user's arguments exactly.
 - Treat `--wait` and `--background` as Codex-side execution controls only. Strip them before calling the companion command.
-- `$cc:review` is native-review only. It does not support staged-only review, unstaged-only review, or extra focus text.
-- If the user needs custom review instructions or more adversarial framing, they should use `$cc:adversarial-review`.
+- `$agy:review` is native-review only. It does not support staged-only review, unstaged-only review, or extra focus text.
+- If the user needs custom review instructions or more adversarial framing, they should use `$agy:adversarial-review`.
 - The companion review process itself always runs in the foreground. Background mode only changes how Codex launches that command.
 - For the detailed execution contract, treat the internal runtime reference at `../../internal-skills/review-runtime/runtime.md` as supporting guidance only. It is an internal reference document, not a public skill to invoke.
 
 Foreground flow:
 - Run:
-  `node "<plugin-root>/scripts/claude-companion.mjs" review --view-state on-success <arguments with --wait/--background removed>`
-- Run that companion command with `sandbox_permissions: "require_escalated"` and the justification `Allow the Claude Code companion to contact the Claude API for this requested review.` Do not first try the companion command in the default network-disabled sandbox.
+  `node "<plugin-root>/scripts/agy-companion.mjs" review --view-state on-success <arguments with --wait/--background removed>`
+- Run that companion command with `sandbox_permissions: "require_escalated"` and the justification `Allow the Antigravity companion to contact the Antigravity API for this requested review.` Do not first try the companion command in the default network-disabled sandbox.
 - Foreground review belongs to the main Codex thread. Do not spawn a review subagent, do not invoke a generic review-runner role, and do not proxy this foreground path through any background worker abstraction.
-- Do not fall back to raw `claude`, `claude-code`, `claude review`, `bash -lc ...claude...`, or any other direct Claude CLI syntax when the companion path is available. The foreground syntax contract here is the resolved companion command above, not a hand-rolled Claude invocation.
+- Do not fall back to raw `agy` invocations or any other direct Antigravity CLI syntax when the companion path is available. The foreground syntax contract here is the resolved companion command above, not a hand-rolled agy invocation.
 - If the resolved companion command fails, surface that failure. Do not silently retry foreground review through a different CLI shape, a generic review runner, or a custom shell wrapper.
 - Present the companion stdout faithfully.
 - Do not fix anything mentioned in the review output.
 
 Background flow:
 - For background review, use Codex's built-in `default` subagent instead of a detached background shell command.
-- Do not satisfy background review by using a generic `claude_review_runner`-style helper role, raw Claude CLI, or any other review executor that bypasses the resolved companion command.
+- Do not satisfy background review by using a generic review-runner helper role, raw Antigravity CLI, or any other review executor that bypasses the resolved companion command.
 - Never satisfy background review by running the companion command itself with shell backgrounding such as `&`, `nohup`, detached `spawn`, or any equivalent direct background process launch.
 - Background here means "spawn the forwarding child via `spawn_agent` and do not wait in the parent turn." The companion review command inside that child still runs once, in the foreground, inside the child thread.
 - Before spawning the built-in child, capture the review job id plus routing context in one call:
-  `node "<plugin-root>/scripts/claude-companion.mjs" background-routing-context --kind review --json`
+  `node "<plugin-root>/scripts/agy-companion.mjs" background-routing-context --kind review --json`
 - If that helper returns a non-empty `jobId`, pass it into the companion command as an internal `--job-id <reserved-job-id>` routing flag.
 - Whenever forwarding that reserved `--job-id`, also pass `--cwd <workspace-root>` using `workspaceRoot` from the same helper response. Reserved job ids are workspace-scoped.
 - If that helper returns a non-empty `ownerSessionId`, include `--owner-session-id <owner-session-id>` in the companion command.
@@ -88,17 +88,17 @@ Background flow:
 - The built-in child must be a pure forwarder. It should:
   - run exactly one shell command
   - execute:
-    `node "<plugin-root>/scripts/claude-companion.mjs" review --view-state defer <arguments with --wait/--background removed>`
+    `node "<plugin-root>/scripts/agy-companion.mjs" review --view-state defer <arguments with --wait/--background removed>`
   - run that command as one blocking foreground shell-tool call, not as a background terminal/session
   - do not request a shell session id, poll a shell session later, or return before the companion command exits
   - if the available shell tool is `exec_command`, call it once in non-interactive mode and wait for command exit in that same call
-  - when using `exec_command`, pass `sandbox_permissions: "require_escalated"` and the justification `Allow the Claude Code companion to contact the Claude API for this requested review.` on that one call; do not first try the companion command in the default network-disabled sandbox
+  - when using `exec_command`, pass `sandbox_permissions: "require_escalated"` and the justification `Allow the Antigravity companion to contact the Antigravity API for this requested review.` on that one call; do not first try the companion command in the default network-disabled sandbox
   - include `--owner-session-id <owner-session-id>` only when the parent resolved a non-empty owner session id
   - include `--job-id <reserved-job-id>` when the parent reserved one
   - include the matching `--cwd <workspace-root>` whenever the command includes that reserved `--job-id`
   - never leave an empty routing placeholder such as `--owner-session-id  --job-id`
   - return only that command's stdout exactly, with no added commentary
-  - ignore stderr progress chatter such as `[cc] ...` lines and preserve only the final stdout-equivalent result text
+  - ignore stderr progress chatter such as `[agy] ...` lines and preserve only the final stdout-equivalent result text
   - not inspect the repo or perform the review itself
   - if a parent thread id is available, allow one extra `send_input` call after a successful shell result and before finishing
   - the child prompt must mention the tool name `send_input` literally; do not replace it with a vague instruction like "send a message to the parent"
@@ -106,14 +106,14 @@ Background flow:
   - that `send_input` call should use the exact tool shape `send_input({ target: <parent-thread-id>, message: <steering-message> })` with no extra prose payload
   - if the parent provided a non-empty parent thread id, do not silently drop the completion notification path from the child prompt
   - if a reserved review job id is available, use this exact notification message:
-    `Background Claude Code review finished. Open it with $cc:result <reserved-job-id>.`
+    `Background Antigravity review finished. Open it with $agy:result <reserved-job-id>.`
   - otherwise fall back to:
-    `Background Claude Code review finished. Inspect it with $cc:status first, then use $cc:result for the finished job you want to open.`
+    `Background Antigravity review finished. Inspect it with $agy:status first, then use $agy:result for the finished job you want to open.`
   - that `send_input` message should use one of those exact steering messages instead of inlining the raw review result
   - use these steering messages instead of embedding the raw review result in the notification
-  - do not embed the raw Claude result inside the notification message
+  - do not embed the raw Antigravity result inside the notification message
   - do not include any other prose in that notification message
   - use that same steering message as the child's own final assistant message instead of echoing the raw review result
 - Do not wait for completion in this turn.
-- After launching, tell the user: `Claude Code review started in the background. Check the subagent session or $cc:status for progress, and once it's done, we will let you know to see the results.`
+- After launching, tell the user: `Antigravity review started in the background. Check the subagent session or $agy:status for progress, and once it's done, we will let you know to see the results.`
 - Do not fix anything mentioned in the review output.

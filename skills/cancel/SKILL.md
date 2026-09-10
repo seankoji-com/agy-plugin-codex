@@ -1,14 +1,14 @@
 ---
 name: cancel
-description: 'Cancel an active tracked Claude Code job in this repository. Args: [job-id]. Use only when the user wants to stop a queued or running Claude Code job.'
+description: 'Cancel an active tracked Antigravity job in this repository. Args: [job-id]. Use only when the user wants to stop a queued or running Antigravity job.'
 ---
 
-# Claude Code Cancel
+# Antigravity Cancel
 
-Use this skill when the user wants to stop an active Claude Code job in this repository.
+Use this skill when the user wants to stop an active Antigravity job in this repository.
 
 Resolve `<plugin-root>` as two directories above this `SKILL.md` file. Always run the companion from that active plugin root:
-`node "<plugin-root>/scripts/claude-companion.mjs" cancel $ARGUMENTS`
+`node "<plugin-root>/scripts/agy-companion.mjs" cancel $ARGUMENTS`
 
 Supported arguments: `[job-id]`
 
