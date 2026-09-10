@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Claude Code Plugin for Codex logo">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Antigravity (agy) Plugin for Codex logo">
   <defs>
     <radialGradient id="bg" cx="50%" cy="30%" r="75%">
       <stop offset="0%" stop-color="#1A1A30"/>
@@ -7,7 +7,7 @@
     <linearGradient id="cg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#B07BFF"/>
       <stop offset="50%" stop-color="#7B39FE"/>
-      <stop offset="100%" stop-color="#6222E8"/>
+      <stop offset="100%" stop-color="#28A9FF"/>
     </linearGradient>
     <linearGradient id="tg" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#FFFFFF"/>
@@ -39,24 +39,19 @@
       stroke-dasharray="373 142" transform="rotate(48 352 200)" stroke-linecap="round"/>
   </g>
 
-  <!-- Sharp CC monogram -->
-  <circle cx="160" cy="200" r="82" fill="none" stroke="url(#cg)" stroke-width="38"
-    stroke-dasharray="373 142" transform="rotate(48 160 200)" stroke-linecap="round"/>
-  <circle cx="352" cy="200" r="82" fill="none" stroke="url(#cg)" stroke-width="38"
-    stroke-dasharray="373 142" transform="rotate(48 352 200)" stroke-linecap="round"/>
-
-  <!-- Bridge dots -->
-  <circle cx="248" cy="200" r="6" fill="#7B39FE" opacity=".5"/>
-  <circle cx="264" cy="200" r="6" fill="#7B39FE" opacity=".5"/>
+  <!-- Sharp A monogram -->
+  <path d="M256 120 L152 282 L360 282 Z" fill="none" stroke="url(#cg)" stroke-width="34"
+    stroke-linejoin="round" stroke-linecap="round"/>
+  <line x1="256" y1="120" x2="256" y2="282" stroke="url(#cg)" stroke-width="14" stroke-linecap="round"/>
 
   <!-- Text with subtle glow -->
   <g filter="url(#ts)">
-    <text x="256" y="370" text-anchor="middle" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="52" font-weight="700" fill="#FFFFFF">Claude Code</text>
+    <text x="256" y="360" text-anchor="middle" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="40" font-weight="700" fill="#FFFFFF">Antigravity</text>
   </g>
-  <text x="256" y="370" text-anchor="middle" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="52" font-weight="700" fill="url(#tg)">Claude Code</text>
+  <text x="256" y="360" text-anchor="middle" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="40" font-weight="700" fill="url(#tg)">Antigravity</text>
 
-  <text x="256" y="416" text-anchor="middle" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="30" font-weight="400" fill="#8888AA" letter-spacing="2">Plugin for Codex</text>
+  <text x="256" y="400" text-anchor="middle" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="30" font-weight="400" fill="#8888AA" letter-spacing="2">Plugin for Codex</text>
 
   <!-- Subtle bottom accent line -->
-  <line x1="180" y1="445" x2="332" y2="445" stroke="url(#cg)" stroke-width="2" stroke-linecap="round" opacity=".3"/>
+  <line x1="180" y1="430" x2="332" y2="430" stroke="url(#cg)" stroke-width="2" stroke-linecap="round" opacity=".3"/>
 </svg>

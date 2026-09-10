@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="Claude Code Plugin for Codex — social preview">
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="Antigravity (agy) Plugin for Codex — social preview">
   <defs>
     <linearGradient id="bgG" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#0E0E1A"/>
@@ -74,9 +74,9 @@
 
   <!-- Title -->
   <g filter="url(#titleGlow)">
-    <text x="640" y="460" text-anchor="middle" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="48" font-weight="700" fill="#FFFFFF">Claude Code Plugin for Codex</text>
+    <text x="640" y="460" text-anchor="middle" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="48" font-weight="700" fill="#FFFFFF">Antigravity (agy) Plugin for Codex</text>
   </g>
-  <text x="640" y="460" text-anchor="middle" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="48" font-weight="700" fill="#FFFFFF">Claude Code Plugin for Codex</text>
+  <text x="640" y="460" text-anchor="middle" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="48" font-weight="700" fill="#FFFFFF">Antigravity (agy) Plugin for Codex</text>
 
   <!-- Tagline -->
   <text x="640" y="510" text-anchor="middle" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="22" fill="#8888AA">Delegate code reviews, design challenges, and rescue tasks</text>
@@ -84,18 +84,18 @@
   <!-- Feature pills -->
   <g transform="translate(340, 545)">
     <rect width="130" height="32" rx="16" fill="#7B39FE" fill-opacity=".1" stroke="#7B39FE" stroke-opacity=".25"/>
-    <text x="65" y="21" text-anchor="middle" font-family="SF Mono, Fira Code, Menlo, monospace" font-size="13" font-weight="500" fill="#B07BFF">$cc:review</text>
+    <text x="65" y="21" text-anchor="middle" font-family="SF Mono, Fira Code, Menlo, monospace" font-size="13" font-weight="500" fill="#B07BFF">$agy:review</text>
   </g>
   <g transform="translate(490, 545)">
     <rect width="210" height="32" rx="16" fill="#E040FB" fill-opacity=".08" stroke="#E040FB" stroke-opacity=".2"/>
-    <text x="105" y="21" text-anchor="middle" font-family="SF Mono, Fira Code, Menlo, monospace" font-size="13" font-weight="500" fill="#E080FF">$cc:adversarial-review</text>
+    <text x="105" y="21" text-anchor="middle" font-family="SF Mono, Fira Code, Menlo, monospace" font-size="13" font-weight="500" fill="#E080FF">$agy:adversarial-review</text>
   </g>
   <g transform="translate(720, 545)">
     <rect width="130" height="32" rx="16" fill="#00BCD4" fill-opacity=".08" stroke="#00BCD4" stroke-opacity=".2"/>
-    <text x="65" y="21" text-anchor="middle" font-family="SF Mono, Fira Code, Menlo, monospace" font-size="13" font-weight="500" fill="#4DD9E8">$cc:rescue</text>
+    <text x="65" y="21" text-anchor="middle" font-family="SF Mono, Fira Code, Menlo, monospace" font-size="13" font-weight="500" fill="#4DD9E8">$agy:rescue</text>
   </g>
 
   <!-- Bottom branding -->
-  <text x="60" y="615" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="14" fill="#444460">Sendbird</text>
-  <text x="1220" y="615" text-anchor="end" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="14" fill="#444460">github.com/sendbird/cc-plugin-codex</text>
+  <text x="60" y="615" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="14" fill="#444460">Sean Koji</text>
+  <text x="1220" y="615" text-anchor="end" font-family="Inter, SF Pro Display, -apple-system, system-ui, sans-serif" font-size="14" fill="#444460">github.com/seankoji-com/agy-plugin-codex</text>
 </svg>

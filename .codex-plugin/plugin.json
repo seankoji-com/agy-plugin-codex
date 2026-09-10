@@ -1,17 +1,18 @@
 {
-  "name": "cc",
-  "version": "1.5.0",
-  "description": "Claude Code Plugin for Codex. Delegate code reviews, investigations, and tracked tasks to Claude Code from inside Codex.",
+  "name": "agy",
+  "version": "2.0.0",
+  "description": "Antigravity (agy) Plugin for Codex. Delegate code reviews, investigations, and tracked tasks to Gemini via the Antigravity CLI from inside Codex.",
   "author": {
-    "name": "Sendbird, Inc.",
-    "email": "jin.ku@sendbird.com",
-    "url": "https://sendbird.com/"
+    "name": "Sean Koji",
+    "url": "https://github.com/seankoji-com"
   },
-  "homepage": "https://github.com/sendbird/cc-plugin-codex",
-  "repository": "https://github.com/sendbird/cc-plugin-codex",
+  "homepage": "https://github.com/seankoji-com/agy-plugin-codex",
+  "repository": "https://github.com/seankoji-com/agy-plugin-codex",
   "license": "Apache-2.0",
   "keywords": [
-    "claude-code",
+    "antigravity",
+    "agy",
+    "gemini",
     "codex",
     "code-review",
     "task-delegation",
@@ -20,28 +21,28 @@
   "skills": "./skills/",
   "hooks": "./hooks/hooks.json",
   "interface": {
-    "displayName": "Claude Code",
-    "shortDescription": "Claude Code Plugin for Codex",
-    "longDescription": "Use Claude Code from inside Codex to run read-only reviews, adversarial design reviews, and tracked rescue tasks through a Claude-backed runtime with job status and result retrieval.",
-    "developerName": "Sendbird, Inc.",
+    "displayName": "Antigravity",
+    "shortDescription": "Antigravity (agy) Plugin for Codex",
+    "longDescription": "Use the Antigravity CLI (agy) from inside Codex to run read-only reviews, adversarial design reviews, and tracked rescue tasks against Gemini through a local, pre-authenticated agy binary, with job status and result retrieval.",
+    "developerName": "Sean Koji",
     "category": "Coding",
     "capabilities": [
       "Interactive",
       "Write"
     ],
-    "websiteURL": "https://sendbird.com/",
-    "privacyPolicyURL": "https://sendbird.com/privacy-notice",
-    "termsOfServiceURL": "https://sendbird.com/terms-of-service",
+    "websiteURL": "https://github.com/seankoji-com/agy-plugin-codex",
+    "privacyPolicyURL": "https://antigravity.google/",
+    "termsOfServiceURL": "https://antigravity.google/",
     "defaultPrompt": [
-      "Use Claude Code to review my current changes through $cc:review",
-      "Use Claude Code to challenge this implementation through $cc:adversarial-review",
-      "Use Claude Code to investigate and fix this issue through $cc:rescue"
+      "Use Antigravity to review my current changes through $agy:review",
+      "Use Antigravity to challenge this implementation through $agy:adversarial-review",
+      "Use Antigravity to investigate and fix this issue through $agy:rescue"
     ],
     "brandColor": "#7B39FE",
-    "composerIcon": "./assets/cc-small.svg",
-    "logo": "./assets/cc-plugin-codex.png",
+    "composerIcon": "./assets/agy-small.svg",
+    "logo": "./assets/agy-plugin-codex.png",
     "screenshots": [
-      "./assets/cc-plugin-codex-screenshot-1.png"
+      "./assets/agy-plugin-codex-screenshot-1.png"
     ]
   }
 }

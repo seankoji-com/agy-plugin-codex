@@ -1,128 +1,13 @@
 # Changelog
 
-## v1.5.0
+## v2.0.0
 
-- Restore the `SessionEnd` hook. Codex 0.146 dispatches `SessionEnd` for root sessions, so the teardown removed in v1.3.0 as non-dispatched now runs again: it reaps background jobs whose process died and clears this session's current-session marker instead of leaving it to age out after seven days. Teardown stays inside Codex's few-second budget — it never kills or waits on live processes, so detached jobs keep running and the `UserPromptSubmit` sweeper still covers them. Codex trusts hooks one by one, so the new `SessionEnd` hook arrives untrusted and stays inert until you approve it in the Codex hooks browser; the already-trusted `SessionStart`, `Stop`, and `UserPromptSubmit` entries are unaffected, because both the trust key index and the hash are per hook.
-- Stop requiring `[features].plugin_hooks`. Upstream retired that flag (`Stage::Removed`), and native plugin hooks now ride on `[features].hooks` alone. Setup requires only `hooks = true` and strips a leftover `plugin_hooks` line from `~/.codex/config.toml`, the same way it already upgrades the legacy `codex_hooks` alias.
-- Correct the review skills' description of `request_user_input`. Omitting `[tools] experimental_request_user_input` leaves the tool enabled; only an explicit `false` hides it in an interactive thread. The conditional ask is unchanged — it still depends on the thread actually having a question tool.
+Full port of `sendbird/cc-plugin-codex` (v1.5.0) from the Claude Code CLI to the Google Antigravity CLI (`agy`). This is a breaking rewrite: the plugin now delegates to Gemini via the local `agy` binary over your Google AI Pro subscription instead of to Claude Code. All `$agy:*` commands, the turn-end review gate, the tracked-job runtime, and the on-disk plugin state are retained; the Claude-specific transport and isolation machinery is replaced.
 
-## v1.4.2
-
-- Refuse companion delegation from Codex threads that are themselves driven by Claude Code. The reverse-direction plugin (Claude Code → Codex) spawns a bare `codex app-server` that inherits `~/.codex`, so its headless review threads see this plugin's skills and delegated the review back to Claude Code — looping the work between the two assistants and burning minutes on `wait`-tool spins with narration in place of findings. Session hooks now stamp `hostOrigin: "claude-code"` on the current-session marker when Claude Code host env markers (`CLAUDECODE` / `CLAUDE_CODE_ENTRYPOINT`) reach them, and `review`, `adversarial-review`, and `task` refuse delegation from such threads with explicit instructions to perform the work directly in that thread. Interactive sessions (env session id present), background forwarding children owned by a different session, and unstamped state all stay open, so the gate fails open everywhere the loop cannot occur.
-- Stop naming `AskUserQuestion` — a Claude Code tool that Codex does not have — in the review skills' execution-mode ask. Codex's own `request_user_input` is gated behind `[tools] experimental_request_user_input` and does not exist in non-interactive threads, so the skills now use a question tool only when the thread actually has one, ask inline when a user is reading, and proceed with the recommended mode in headless threads instead of spinning on a collaboration tool looking for a picker that cannot appear.
-- Skip the turn-end review gate when no turn baseline was recorded for the session. The baseline is written on `UserPromptSubmit`, so its absence means no user prompt drove the session — for example an externally hosted headless thread — and there is no turn to review. Previously the gate treated a missing baseline as a signal to run the full Claude review.
-
-## v1.4.1
-
-- Stop defaulting reasoning effort per model. v1.4.0 gave every friendly alias a `high` default, which duplicated a catalog that belongs to the host CLI — exactly like the pinned model IDs removed in that same release — and was wrong for `haiku`, since Haiku 4.5 is not in the reasoning-effort model tier. `--effort` is now forwarded only when you pass it, so each model keeps whatever effort Claude Code defaults to and Claude Code stays the authority on which levels a model supports. `--model` still defaults to `opus`. Users who relied on the v1.2.0 `opus` + `xhigh` behavior should pass `--effort xhigh` explicitly.
-- Gate `--model` and `--effort` on their resolved values in `buildArgs()`. Both resolvers return `undefined` for whitespace-only input, so a blank flag value pushed `undefined` into the spawn argv and failed with `ERR_INVALID_ARG_TYPE`. Blank values are now dropped like any other unset flag.
-
-## v1.4.0
-
-- Delegate Claude model resolution to Claude Code. `--model` now forwards every value through unchanged, the friendly aliases `fable`, `opus`, `sonnet`, and `haiku` are matched case-insensitively, and the plugin no longer pins `claude-opus-4-7[1m]` / `claude-sonnet-4-6[1m]` or forces the 1M-context variant. Run `/model` in Claude Code to discover what your account and provider actually offer. Effort is also no longer inferred from the model; see v1.4.1, which corrects the per-alias `high` default this release introduced.
-- Add `fable` as a supported model alias across `review`, `adversarial-review`, and `rescue`, forwarded to Claude Code rather than pinned to a version-specific model ID.
-- Stop pinning `spawn_agent` routing to a Codex-owned catalog. Codex 0.145 only advertises `agent_type` when custom agents are configured and dropped `gpt-5.4-mini` / `gpt-5.4` from the child-model catalog, which broke every built-in background forwarding spawn. The forwarding children now omit `agent_type` and `model`, inheriting the built-in default agent and the parent model while keeping `reasoning_effort: "medium"`.
-- Request targeted `sandbox_permissions: "require_escalated"` for the single Claude companion command in the review, adversarial-review, and rescue forwarding paths. Codex's default `workspace-write` sandbox has no outbound network, so the companion previously started Claude Code only for it to fail with `API Error: Unable to connect to API (ENOTFOUND)`. Global `network_access` is still not required.
-- Stop auto-reaping live background jobs when the sandbox denies a process probe. `isProcessAlive()` now treats `EPERM` as "exists but cannot be signaled", and `validateProcessIdentity()` falls back to that probe when the identity check is denied instead of reporting death. `ESRCH`, absent PIDs, and genuine identity mismatches stay classified as dead, so PID-reuse detection is unchanged.
-- Update GitHub Actions, ESLint, runtime globals, and transitive development dependencies.
-
-## v1.3.0
-
-- Preserve the originating workspace when reserved background job ids pass through built-in rescue, review, and adversarial-review forwarding children.
-- Store plugin state under Codex's injected marketplace-qualified `PLUGIN_DATA` root, migrate the legacy `cc` and `claude-code` namespaces, and configure the destination plus migration roots for sandboxed writes. Existing sessions receive explicit restart-and-rerun guidance before review-gate changes continue, and uninstall removes the plugin-specific writable-root grants.
-- Harden the turn-end review gate with the bundled read-only git MCP server, Claude-compatible Draft-07 structured output, and bounded inline block reasons while preserving full diagnostics in snapshots.
-- Remove the non-dispatched `SessionEnd` hook and reap stale background jobs safely during `UserPromptSubmit` without cancelling live work.
-- Send Claude prompts through stdin and resolve native Windows/npm Claude executables, including working-tree reviews larger than the Windows command-line limit.
-- Bound aggregate untracked review context and retain detached worker diagnostics in managed job logs.
-- Refresh marketplace installation guidance, repository agent instructions, GitHub Actions, TypeScript, ESLint, Node type definitions, and runtime globals.
-
-## v1.2.1
-
-- Switch marketplace installs to Codex native plugin hooks: bundled hooks now load from `hooks/hooks.json` in the active plugin cache with `$PLUGIN_ROOT` instead of writing managed global hook commands into `~/.codex/hooks.json`.
-- Remove the local checkout/stable-root install path from the supported install flow. The installer now uses `marketplace/add` + `plugin/install`, cleans stale `~/.codex/plugins/cc` state, and enables `[features].hooks` plus `[features].plugin_hooks`.
-- Update public skills to resolve the active plugin root from their `SKILL.md` path, so marketplace cache installs run the matching companion code after plugin updates.
-- Refresh README, setup, installer, and E2E coverage around the marketplace/cache-only install path, native hook feature-gate repair, and `$cc:setup` trust repair for this plugin's hook hashes.
-- Clarify the optional review gate as a turn-end blocking review of the previous Codex turn and document that gate runs keep the user's Claude Code default model and effort settings.
-
-## v1.2.0
-
-- Default the Claude model for `review`, `adversarial-review`, and `rescue`/`task` to `opus` (resolved to the 1M-context variant `claude-opus-4-7[1m]`) with `xhigh` effort. The `sonnet` alias resolves to `claude-sonnet-4-6[1m]` and defaults to `high` effort; `haiku` stays on `claude-haiku-4-5` with effort unset. `--model` and `--effort` remain user-overridable; `xhigh` is now a first-class effort level and `max` is reserved for users who explicitly opt in.
-- Isolate `review` and `adversarial-review` from the user repo with a three-layer design instead of the previous Bash-pattern allowlist (which the Claude CLI does not strictly enforce — once `Bash` is in the allowlist with any sub-pattern, the entire `Bash` tool opens up). Reviews now run inside an ephemeral `git worktree` checked out at the branch tip (or the original repo for `working-tree` scope, so staged/unstaged/untracked changes remain visible), use a bundled read-only git MCP server (`mcp-git` subcommand) exposing `diff`/`log`/`show`/`blame`/`status`/`grep`/`ls_files` as structured tools with strict ref/path validation, and tighten the allowlist to `Read`, `Glob`, `Grep`, `WebSearch`, `WebFetch`, and `mcp__gitReview__*` only (no `Bash` entry).
-- Leave network unrestricted in the `read-only` sandbox preset so `WebFetch`/`WebSearch` and the Claude CLI's own API path keep working; safety comes from removing `Bash` from the allowlist rather than from blocking network. File writes outside the OS temp dir stay blocked.
-- Expose `--effort` on `review` and `adversarial-review` and document the new defaults in `SKILL.md`, `README.md`, and the internal `cli-runtime` reference.
-- Sweep stranded `review-worktrees/`, `sandbox/`, and `mcp/` runtime files older than six hours at the start of every review to reclaim resources after `kill -9` or crashed runs.
-
-## v1.1.0
-
-- Restructure the internal Claude runtime and prompt-shaping guidance from pseudo-hidden `SKILL.md` files into plain internal reference documents, while keeping the public `review`, `adversarial-review`, and `rescue` skills self-sufficient on their critical invocation rules.
-- Add a shared internal runtime reference for review/adversarial-review and strengthen the contract tests so installed-root routing, exact `send_input` notification shape, and empty routing-placeholder guards stay locked in across future cleanup passes.
-- Tighten the built-in background forwarding contract so the child must run the companion command as one blocking foreground shell-tool call instead of spawning a background terminal/session of its own, and add E2E coverage for that regression.
-- Remove workstation-specific absolute internal-doc link targets from the public skill docs so source trees, installed copies, and marketplace snapshots all keep valid internal references.
-
-## v1.0.9
-
-- Add marketplace-aware install foundation for Codex 0.121+: the installer can now prefer `marketplace/add` + `plugin/install` when an official marketplace source is available, while keeping the existing legacy fallback path for unsupported builds.
-- Generalize managed plugin identity handling so setup, hook cleanup, and cache detection work for `cc@<marketplace>` installs instead of assuming `cc@local-plugins`.
-- Document the new canonical marketplace location at `sendbird/codex-marketplace` and make Sendbird marketplace install the first documented path, with `$cc:setup` called out as the required post-install hook repair step.
-
-## v1.0.8
-
-- Clarify the routing boundary between `$cc:review`, `$cc:adversarial-review`, and `$cc:rescue`, including the rule that ordinary code-review requests default to `review`, stronger scrutiny plus custom focus text belongs to `adversarial-review`, and rescue is only for Claude-owned follow-through work.
-- Add E2E coverage that injects both review skills together and verifies the focus-text distinction is surfaced to the parent turn while the adversarial focus path still reaches Claude end to end.
-- Refresh the macOS integration concurrency test so aggressive concurrent polling no longer flakes when some jobs finish slightly later than the initial polling window.
-- Update development dependencies with the merged Dependabot patch bumps for `@types/node` and `globals`.
-
-## v1.0.7
-
-- Add GitHub CI coverage across Windows, macOS, and Linux, with a portable cross-platform test suite plus Linux-only full integration/E2E coverage.
-- Harden background routing by validating `parentThreadId`, combining reserved-job and session-routing metadata into one helper, and making background review/rescue explicitly use built-in forwarding subagents rather than direct detached companion processes.
-- Stop exposing managed job log paths through user/model-facing status and result surfaces while keeping on-disk logs for debugging.
-- Make installed skill-path materialization consistent for both staged installs and direct local-checkout installs, and centralize installer path helpers for reuse.
-- Switch sandbox temp-dir settings from a hardcoded `/tmp` path to the OS temp directory so the runtime configuration stays valid off Linux.
-
-## v1.0.6
-
-- Restore parent-session ownership for built-in background rescue/review runs so resume candidates, plain `$cc:status`, and no-argument `$cc:result` stay aligned after nested child sessions run.
-- Distinguish the owning Codex session from the actual Claude Code session in job rendering so `claude --resume ...` points at the real Claude session instead of the parent owner marker.
-- Tighten the background review and adversarial-review forwarding contracts around `send_input` notification behavior and add E2E coverage for built-in notification steering in both flows.
-
-## v1.0.5
-
-- Keep built-in background review jobs attached to the parent Codex session so plain `$cc:status` and `$cc:result` stay intuitive after nested rescue/review flows.
-- Make `$cc:status --all` show the full job history for the current repository workspace instead of staying session-scoped.
-- Harden large-diff review and hook fingerprinting so oversized `git diff` output degrades cleanly instead of failing with `ENOBUFS`.
-- Clarify README guidance around review visibility, large diffs, and the difference between session-scoped status and repository-wide status.
-
-## v1.0.4
-
-- Make background built-in rescue/review completions steer users to `$cc:result <job-id>` instead of inlining raw child output.
-- Harden reserved job-id handling by requiring real reservations, sanitizing reserved-job paths, and releasing reservations across validation and job-creation failures.
-- Add regression coverage for reserved job ids, background completion steering, large diff omission, and untracked directory/symlink review context handling.
-- Refresh the README to be more install-first and user-friendly for Codex users trying Claude Code for the first time.
-
-## v1.0.3
-
-- Refresh the README opening copy and update the bundled visual assets for launch/readme presentation.
-- Add a GitHub-friendly social preview asset under `assets/social-preview.{svg,png}`.
-- Add a changelog release gate so `check`, `prepack`, CI, publish, and `npm version` all fail when the current package version is missing from `CHANGELOG.md`.
-
-## v1.0.2
-
-- Add fallback `cc-*` skill and prompt wrappers only when Codex's official `plugin/install` path is unavailable.
-- Remove stale managed fallback wrappers after official install succeeds again and during uninstall/self-cleanup.
-- Clarify that marketplace-style installs which bypass the installer should run `$cc:setup` once to install hooks.
-- Stabilize the concurrent polling integration assertion used in release verification.
-
-## v1.0.1
-
-- Install and uninstall through Codex app-server when available, with safe fallback activation on unsupported builds.
-- Remove the global `cc-rescue` agent and keep only managed Codex hooks outside the plugin directory.
-- Switch rescue to the built-in forwarding subagent path and harden hook self-clean behavior.
-- Auto-install missing hooks during `$cc:setup`.
-- Clarify background unread-result nudges and the hooks-only global state model in the README.
-
-## v1.0.0
-
-- Initial public release of the Claude Code plugin for Codex.
-- Includes tracked review, adversarial review, rescue, status, result, cancel, and setup flows.
-- Includes Codex hook integration and plugin installer automation.
+- **New transport** — spawns `agy -p` per invocation with `--output-format json` (verified against agy 1.1.28). Reviews run read-only via `--mode plan`; `task --write` uses `--mode accept-edits`. Prompts travel in argv (agy has no stdin prompt) and are capped per platform with a truncation marker. Drop the NDJSON streaming parser, the per-run sandbox `--settings` files, and the per-run git MCP server (`mcp-git`), since agy `--mode plan` is inherently read-only and needs no sandbox profile.
+- **Default model and effort** — `review`, `adversarial-review`, and `rescue`/`task` default to `flash-medium` (alias for `gemini-3.8-flash-medium`) with no forced effort. `--effort` accepts `low|medium|high` (legacy aliases `none|minimal`→`low`, `xhigh|max`→`high`). Friendly aliases `flash-low`/`flash-medium`/`flash-high` map to catalog IDs; other model names pass through and agy validates them.
+- **Auth without a key** — no API keys. Local auth is detected from `~/.gemini/antigravity-cli/` (settings.json or oauth token). A stale token surfaces as a failed/timeout turn treated as a non-blocking warning.
+- **Turn-end review gate** — `ALLOW:`/`BLOCK:` protocol with the exact §6.1 gate rubric in `prompts/stop-review-gate.md` (block only on runtime exceptions, syntax/import errors, severe security vulnerabilities, or explicit test regressions; never on style/naming). Service-limit and rate-limit failures fail open so a quota error cannot wedge an edit-producing turn.
+- **Resume** — task resume now continues an Antigravity conversation via `agy --conversation <id>` instead of `claude --resume <session>`.
+- **Rename** — plugin identity `cc`→`agy`, env prefix `AGY_PLUGIN_CODEX_`, session/skip env vars `AGY_COMPANION_SESSION_ID` / `AGY_COMPANION_SKIP_INTERACTIVE_HOOKS`, plugin data namespace `agy`, and `[agy]` progress prefix. `$gemini:` remains an unsupported alias — the Codex manifest defines a single plugin `name` with no alias field (documented limitation).
+- **Installer** — `$agy:setup` guides install via the official Antigravity CLI installer (`~/.local/bin/agy`), not npm. `CLAUDE_ENV_FILE` stays as the host-provided cross-agent hook env-file convention.
