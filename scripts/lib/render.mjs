@@ -1,11 +1,11 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  *
- * Derived from OpenAI's codex-plugin-cc and modified for Claude Code delegation.
+ * Derived from OpenAI's codex-plugin-cc and modified for Antigravity delegation.
  *
  * Output rendering — adapted from codex-plugin-cc.
- * All "Codex" labels → "Claude Code".
+ * All "Codex" labels → "Antigravity".
  */
 
 import path from "node:path";
@@ -91,7 +91,7 @@ function recoverStructuredStoredReviewOutput(job, storedJob) {
   if (!recovered.parsed) return "";
 
   return renderReviewResult(recovered, {
-    reviewLabel: result.review ?? job.title?.replace(/^Claude Code /, "") ?? "Review",
+    reviewLabel: result.review ?? job.title?.replace(/^Antigravity /, "") ?? "Review",
     targetLabel: result.target?.label ?? "unknown target",
     reasoningSummary: null,
   });
@@ -108,8 +108,9 @@ export function escapeMarkdownCell(value) {
   return String(value ?? "").replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
 }
 
-function resolveClaudeSessionId(job, storedJob = null) {
+function resolveConversationId(job, storedJob = null) {
   return (
+    storedJob?.result?.conversationId ??
     storedJob?.result?.sessionId ??
     storedJob?.threadId ??
     job?.threadId ??
@@ -121,14 +122,14 @@ function resolveOwningSessionId(job, storedJob = null) {
   return storedJob?.sessionId ?? job?.sessionId ?? null;
 }
 
-function formatClaudeResumeCommand(job, storedJob = null) {
-  const sessionId = resolveClaudeSessionId(job, storedJob);
-  if (!sessionId) return null;
-  return `claude --resume ${sessionId}`;
+function formatAgyResumeCommand(job, storedJob = null) {
+  const conversationId = resolveConversationId(job, storedJob);
+  if (!conversationId) return null;
+  return `agy --conversation ${conversationId}`;
 }
 
-function formatClaudeSkillCommand(skill, jobId = null) {
-  return jobId ? `$cc:${skill} ${jobId}` : `$cc:${skill}`;
+function formatAgySkillCommand(skill, jobId = null) {
+  return jobId ? `$agy:${skill} ${jobId}` : `$agy:${skill}`;
 }
 
 function formatMarkdownLink(label, target) {
@@ -177,11 +178,11 @@ function collectStatusRows(report) {
 }
 
 function formatStatusActions(job) {
-  const actions = [`\`${formatClaudeSkillCommand("status", job.id)}\``];
+  const actions = [`\`${formatAgySkillCommand("status", job.id)}\``];
   if (job.status === "queued" || job.status === "running") {
-    actions.push(`\`${formatClaudeSkillCommand("cancel", job.id)}\``);
+    actions.push(`\`${formatAgySkillCommand("cancel", job.id)}\``);
   } else {
-    actions.push(`\`${formatClaudeSkillCommand("result", job.id)}\``);
+    actions.push(`\`${formatAgySkillCommand("result", job.id)}\``);
   }
   return actions.join("<br>");
 }
@@ -224,13 +225,13 @@ function appendReasoningSection(lines, reasoningSummary) {
 
 export function renderSetupReport(report) {
   const lines = [
-    "# Claude Code Setup",
+    "# Antigravity Setup",
     "",
     `Status: ${report.ready ? "ready" : "needs attention"}`,
     "",
     "Checks:",
     `- node: ${report.node.detail}`,
-    `- claude: ${report.claude.detail}`,
+    `- agy: ${report.agy.detail}`,
     `- auth: ${report.auth.detail}`,
     `- hooks: ${report.hooks.detail}`,
     ...(report.hookTrust ? [`- hook trust: ${report.hookTrust.detail}`] : []),
@@ -259,18 +260,18 @@ export function renderSetupReport(report) {
 export function renderReviewResult(parsedResult, meta) {
   if (!parsedResult.parsed) {
     if (parsedResult.rawOutput) {
-      // Claude responded in natural language — show it directly instead of as an error
-      const lines = [`# Claude Code ${meta.reviewLabel}`, "", `Target: ${meta.targetLabel}`, "", parsedResult.rawOutput];
+      // agy responded in natural language — show it directly instead of as an error
+      const lines = [`# Antigravity ${meta.reviewLabel}`, "", `Target: ${meta.targetLabel}`, "", parsedResult.rawOutput];
       appendReasoningSection(lines, meta.reasoningSummary ?? parsedResult.reasoningSummary);
       return `${lines.join("\n").trimEnd()}\n`;
     }
-    const lines = [`# Claude Code ${meta.reviewLabel}`, "", "Claude Code did not return output.", "", `- Error: ${parsedResult.parseError}`];
+    const lines = [`# Antigravity ${meta.reviewLabel}`, "", "Antigravity did not return output.", "", `- Error: ${parsedResult.parseError}`];
     return `${lines.join("\n").trimEnd()}\n`;
   }
 
   const validationError = validateReviewResultShape(parsedResult.parsed);
   if (validationError) {
-    const lines = [`# Claude Code ${meta.reviewLabel}`, "", `Target: ${meta.targetLabel}`, "Claude Code returned JSON with an unexpected review shape.", "", `- Validation error: ${validationError}`];
+    const lines = [`# Antigravity ${meta.reviewLabel}`, "", `Target: ${meta.targetLabel}`, "Antigravity returned JSON with an unexpected review shape.", "", `- Validation error: ${validationError}`];
     if (parsedResult.rawOutput) lines.push("", "Raw final message:", "", "```text", parsedResult.rawOutput, "```");
     appendReasoningSection(lines, meta.reasoningSummary ?? parsedResult.reasoningSummary);
     return `${lines.join("\n").trimEnd()}\n`;
@@ -278,7 +279,7 @@ export function renderReviewResult(parsedResult, meta) {
 
   const data = normalizeReviewResultData(parsedResult.parsed);
   const findings = [...data.findings].sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
-  const lines = [`# Claude Code ${meta.reviewLabel}`, "", `Target: ${meta.targetLabel}`, `Verdict: ${data.verdict}`, "", data.summary, ""];
+  const lines = [`# Antigravity ${meta.reviewLabel}`, "", `Target: ${meta.targetLabel}`, `Verdict: ${data.verdict}`, "", data.summary, ""];
   if (findings.length === 0) {
     lines.push("No material findings.");
   } else {
@@ -301,18 +302,18 @@ export function renderReviewResult(parsedResult, meta) {
 export function renderTaskResult(parsedResult) {
   const rawOutput = typeof parsedResult?.rawOutput === "string" ? parsedResult.rawOutput : "";
   if (rawOutput) return rawOutput.endsWith("\n") ? rawOutput : `${rawOutput}\n`;
-  const message = String(parsedResult?.failureMessage ?? "").trim() || "Claude Code did not return a final message.";
+  const message = String(parsedResult?.failureMessage ?? "").trim() || "Antigravity did not return a final message.";
   return `${message}\n`;
 }
 
 export function renderStatusReport(report) {
   const rows = collectStatusRows(report).slice(0, 15);
-  if (rows.length === 0) return "No Claude Code jobs recorded yet.\n";
+  if (rows.length === 0) return "No Antigravity jobs recorded yet.\n";
   return renderStatusTable(rows);
 }
 
 export function renderJobStatusReport(job) {
-  const lines = ["# Claude Code Job Status", "", "| Field | Value |", "| --- | --- |"];
+  const lines = ["# Antigravity Job Status", "", "| Field | Value |", "| --- | --- |"];
   pushKeyValueTableRow(lines, "Job", `\`${job.id}\``, { raw: true });
   pushKeyValueTableRow(lines, "Kind", job.kindLabel ?? job.kind ?? "");
   pushKeyValueTableRow(lines, "Title", job.title ?? "");
@@ -324,19 +325,19 @@ export function renderJobStatusReport(job) {
   if (isPendingJob(job)) pushKeyValueTableRow(lines, "Elapsed", job.elapsed ?? "");
   else pushKeyValueTableRow(lines, "Duration", job.duration ?? job.elapsed ?? "");
   const ownerSessionId = resolveOwningSessionId(job);
-  const claudeSessionId = resolveClaudeSessionId(job);
-  if (claudeSessionId) {
-    pushKeyValueTableRow(lines, "Claude Code session", `\`${claudeSessionId}\``, { raw: true });
+  const conversationId = resolveConversationId(job);
+  if (conversationId) {
+    pushKeyValueTableRow(lines, "Antigravity conversation", `\`${conversationId}\``, { raw: true });
   }
-  if (ownerSessionId && ownerSessionId !== claudeSessionId) {
+  if (ownerSessionId && ownerSessionId !== conversationId) {
     pushKeyValueTableRow(lines, "Owning Codex session", `\`${ownerSessionId}\``, { raw: true });
   }
-  const resumeCmd = formatClaudeResumeCommand(job);
+  const resumeCmd = formatAgyResumeCommand(job);
   if (resumeCmd) pushKeyValueTableRow(lines, "Resume", `\`${resumeCmd}\``, { raw: true });
   if (job.status === "queued" || job.status === "running") {
-    pushKeyValueTableRow(lines, "Cancel", `\`${formatClaudeSkillCommand("cancel", job.id)}\``, { raw: true });
+    pushKeyValueTableRow(lines, "Cancel", `\`${formatAgySkillCommand("cancel", job.id)}\``, { raw: true });
   } else {
-    pushKeyValueTableRow(lines, "Result", `\`${formatClaudeSkillCommand("result", job.id)}\``, { raw: true });
+    pushKeyValueTableRow(lines, "Result", `\`${formatAgySkillCommand("result", job.id)}\``, { raw: true });
   }
   if (job.status === "cancel_failed") {
     pushKeyValueTableRow(
@@ -351,32 +352,32 @@ export function renderJobStatusReport(job) {
 
 export function renderStoredJobResult(job, storedJob) {
   const ownerSessionId = resolveOwningSessionId(job, storedJob);
-  const claudeSessionId = resolveClaudeSessionId(job, storedJob);
-  const resumeCmd = formatClaudeResumeCommand(job, storedJob);
+  const conversationId = resolveConversationId(job, storedJob);
+  const resumeCmd = formatAgyResumeCommand(job, storedJob);
   const recoveredStructuredOutput = normalizeStoredOutput(
     recoverStructuredStoredReviewOutput(job, storedJob)
   );
   if (recoveredStructuredOutput) {
-    if (!claudeSessionId && !ownerSessionId) return recoveredStructuredOutput;
+    if (!conversationId && !ownerSessionId) return recoveredStructuredOutput;
     let suffix = "";
-    if (claudeSessionId) suffix += `\nClaude Code session: ${claudeSessionId}\n`;
-    if (ownerSessionId && ownerSessionId !== claudeSessionId) suffix += `Owning Codex session: ${ownerSessionId}\n`;
+    if (conversationId) suffix += `\nAntigravity conversation: ${conversationId}\n`;
+    if (ownerSessionId && ownerSessionId !== conversationId) suffix += `Owning Codex session: ${ownerSessionId}\n`;
     if (resumeCmd) suffix += `Resume: ${resumeCmd}\n`;
     return `${recoveredStructuredOutput}${suffix}`;
   }
   const storedOutput = normalizeStoredOutput(getStoredJobOutput(storedJob));
   if (storedOutput) {
     const output = storedOutput;
-    if (!claudeSessionId && !ownerSessionId) return output;
+    if (!conversationId && !ownerSessionId) return output;
     let suffix = "\n";
-    if (claudeSessionId) suffix += `Claude Code session: ${claudeSessionId}\n`;
-    if (ownerSessionId && ownerSessionId !== claudeSessionId) suffix += `Owning Codex session: ${ownerSessionId}\n`;
+    if (conversationId) suffix += `Antigravity conversation: ${conversationId}\n`;
+    if (ownerSessionId && ownerSessionId !== conversationId) suffix += `Owning Codex session: ${ownerSessionId}\n`;
     if (resumeCmd) suffix += `Resume: ${resumeCmd}\n`;
     return `${output}${suffix}`;
   }
-  const lines = [`# ${job.title ?? "Claude Code Result"}`, "", `Job: ${job.id}`, `Status: ${job.status}`];
-  if (claudeSessionId) lines.push(`Claude Code session: ${claudeSessionId}`);
-  if (ownerSessionId && ownerSessionId !== claudeSessionId) lines.push(`Owning Codex session: ${ownerSessionId}`);
+  const lines = [`# ${job.title ?? "Antigravity Result"}`, "", `Job: ${job.id}`, `Status: ${job.status}`];
+  if (conversationId) lines.push(`Antigravity conversation: ${conversationId}`);
+  if (ownerSessionId && ownerSessionId !== conversationId) lines.push(`Owning Codex session: ${ownerSessionId}`);
   if (resumeCmd) lines.push(`Resume: ${resumeCmd}`);
   if (job.summary) lines.push(`Summary: ${job.summary}`);
   if (job.errorMessage) lines.push("", job.errorMessage);
@@ -386,10 +387,10 @@ export function renderStoredJobResult(job, storedJob) {
 }
 
 export function renderCancelReport(job) {
-  const lines = ["# Claude Code Cancel", "", `Cancelled ${job.id}.`, ""];
+  const lines = ["# Antigravity Cancel", "", `Cancelled ${job.id}.`, ""];
   if (job.title) lines.push(`- Title: ${job.title}`);
   if (job.summary) lines.push(`- Summary: ${job.summary}`);
   if (job.status === "cancel_failed") lines.push(`- Warning: Process group may still be alive. Manual cleanup: kill -9 -${job.pgid ?? job.pid}`);
-  lines.push("- Check `$cc:status` for the updated queue.");
+  lines.push("- Check `$agy:status` for the updated queue.");
   return `${lines.join("\n").trimEnd()}\n`;
 }

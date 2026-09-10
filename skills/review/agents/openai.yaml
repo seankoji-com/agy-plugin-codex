@@ -1,3 +1,3 @@
 interface:
-  display_name: "Claude Code Review"
-  short_description: "Args: --wait, --background, --base <ref>, --scope <auto|working-tree|branch>, --model <model>. Standard review of local git changes."
+  display_name: "Antigravity Review"
+  short_description: "Args: --wait, --background, --base <ref>, --scope <auto|working-tree|branch>, --model <model>, --effort <low|medium|high>. Standard review of local git changes."

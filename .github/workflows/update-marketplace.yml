@@ -17,8 +17,8 @@ jobs:
     permissions:
       contents: read
     env:
-      MARKETPLACE_REPO: sendbird/codex-marketplace
-      MARKETPLACE_BRANCH_PREFIX: auto/update-cc-
+      MARKETPLACE_REPO: seankoji-com/codex-marketplace
+      MARKETPLACE_BRANCH_PREFIX: auto/update-agy-
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -26,16 +26,16 @@ jobs:
 
       - name: Verify marketplace token is configured
         env:
-          MARKETPLACE_TOKEN: ${{ secrets.SENDBIRD_CODEX_MARKETPLACE_PUSH_TOKEN }}
+          MARKETPLACE_TOKEN: ${{ secrets.SEANKOJI_CODEX_MARKETPLACE_PUSH_TOKEN }}
         run: |
           if [ -z "$MARKETPLACE_TOKEN" ]; then
-            echo "SENDBIRD_CODEX_MARKETPLACE_PUSH_TOKEN is required to update $MARKETPLACE_REPO" >&2
+            echo "SEANKOJI_CODEX_MARKETPLACE_PUSH_TOKEN is required to update $MARKETPLACE_REPO" >&2
             exit 1
           fi
 
       - name: Build marketplace snapshot
         run: |
-          SNAPSHOT_DIR="$RUNNER_TEMP/marketplace-snapshot/cc"
+          SNAPSHOT_DIR="$RUNNER_TEMP/marketplace-snapshot/agy"
           mkdir -p "$SNAPSHOT_DIR"
           for entry in \
             .codex-plugin \
@@ -60,26 +60,26 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          repository: sendbird/codex-marketplace
+          repository: seankoji-com/codex-marketplace
           path: marketplace
-          token: ${{ secrets.SENDBIRD_CODEX_MARKETPLACE_PUSH_TOKEN }}
+          token: ${{ secrets.SEANKOJI_CODEX_MARKETPLACE_PUSH_TOKEN }}
           fetch-depth: 0
 
       - name: Update marketplace snapshot
         run: |
-          rm -rf marketplace/plugins/cc
+          rm -rf marketplace/plugins/agy
           mkdir -p marketplace/plugins
-          rsync -a --delete "$RUNNER_TEMP/marketplace-snapshot/cc/" marketplace/plugins/cc/
+          rsync -a --delete "$RUNNER_TEMP/marketplace-snapshot/agy/" marketplace/plugins/agy/
 
       - name: Create marketplace pull request
         id: create_pr
         env:
-          GH_TOKEN: ${{ secrets.SENDBIRD_CODEX_MARKETPLACE_PUSH_TOKEN }}
+          GH_TOKEN: ${{ secrets.SEANKOJI_CODEX_MARKETPLACE_PUSH_TOKEN }}
           REF_NAME: ${{ github.event.release.tag_name || inputs.ref || github.ref_name }}
         run: |
           cd marketplace
 
-          if git diff --quiet -- plugins/cc; then
+          if git diff --quiet -- plugins/agy; then
             echo "Marketplace snapshot already matches $REF_NAME"
             echo "pr_number=" >> "$GITHUB_OUTPUT"
             exit 0
@@ -89,8 +89,8 @@ jobs:
           git checkout -B "$BRANCH_NAME"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add plugins/cc
-          git commit -m "Update cc plugin snapshot to $REF_NAME"
+          git add plugins/agy
+          git commit -m "Update agy plugin snapshot to $REF_NAME"
           git push --force-with-lease origin "$BRANCH_NAME"
 
           PR_NUMBER=$(gh pr list \
@@ -104,8 +104,8 @@ jobs:
               --repo "$MARKETPLACE_REPO" \
               --base main \
               --head "$BRANCH_NAME" \
-              --title "Update cc plugin snapshot to $REF_NAME" \
-              --body "Update \`plugins/cc\` in the Sendbird Codex marketplace to \`$REF_NAME\` from \`sendbird/cc-plugin-codex\`."
+              --title "Update agy plugin snapshot to $REF_NAME" \
+              --body "Update \`plugins/agy\` in the seankoji-com Codex marketplace to \`$REF_NAME\` from \`seankoji-com/agy-plugin-codex\`."
             PR_NUMBER=$(gh pr list \
               --repo "$MARKETPLACE_REPO" \
               --head "$BRANCH_NAME" \

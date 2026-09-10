@@ -1,20 +1,21 @@
 #!/usr/bin/env node
 
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  *
- * Derived from OpenAI's codex-plugin-cc and modified for Claude Code delegation.
+ * Derived from OpenAI's codex-plugin-cc and modified for Antigravity (agy)
+ * delegation.
  *
- * claude-companion.mjs — Claude Code companion CLI for the Codex plugin.
+ * agy-companion.mjs — Antigravity companion CLI for the Codex plugin.
  *
  * Adapted from codex-companion.mjs:
- * - Uses claude-cli.mjs instead of app-server/broker
- * - Friendly model aliases canonicalize to lowercase; other names pass through
- * - Default model when --model is unset: opus
- * - No effort default: --effort is forwarded only when the user passes it
- * - Claude CLI effort values: low, medium, high, xhigh, max
- * - Legacy effort aliases: none|minimal -> low
+ * - Uses agy-cli.mjs (agy -p subprocess transport) instead of app-server/broker
+ * - Friendly model aliases (flash-low/medium/high) map to catalog IDs; other
+ *   names pass through and agy validates them
+ * - Default model when --model is unset: flash-medium
+ * - Effort is forwarded only when the user passes it; valid values:
+ *   low, medium, high (legacy aliases none|minimal -> low, xhigh|max -> high)
  * - Review gate matches upstream setup semantics: Stop hook runs when enabled
  *
  * Subcommands:
@@ -36,23 +37,16 @@ import {
   resolveWritablePluginDataRoots,
 } from "./lib/codex-paths.mjs";
 import {
-  getClaudeAvailability,
-  getClaudeAuthStatus,
-  runClaudeTurn,
-  runClaudeReview,
-  runClaudeAdversarialReview,
-  cancelClaudeProcess,
-  resolveModel,
-  resolveEffort,
+  cancelAgyProcess,
+  getAgyAuthStatus,
+  getAgyAvailability,
   resolveDefaultModel,
-  SANDBOX_READ_ONLY_TOOLS,
-  createSandboxSettings,
-  cleanupSandboxSettings,
-  createReviewMcpConfig,
-  cleanupReviewMcpConfig,
-  pruneStaleSandboxSettings,
-  pruneStaleReviewMcpConfigs,
-} from "./lib/claude-cli.mjs";
+  resolveEffort,
+  resolveModel,
+  runAgyAdversarialReview,
+  runAgyReview,
+  runAgyTurn,
+} from "./lib/agy-cli.mjs";
 import {
   createReviewIsolation,
   pruneStaleReviewWorktrees,
@@ -136,18 +130,18 @@ function printUsage() {
   console.log(
     [
       "Usage:",
-      "  node scripts/claude-companion.mjs setup [--enable-review-gate|--disable-review-gate] [--json]",
-      "  node scripts/claude-companion.mjs review [--wait|--background] [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [--effort <low|medium|high|xhigh|max>]",
-      "  node scripts/claude-companion.mjs adversarial-review [--wait|--background] [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [--effort <low|medium|high|xhigh|max>] [focus text]",
-      "  node scripts/claude-companion.mjs task [--background] [--write] [--resume-last|--resume|--fresh] [--model <model>] [--effort <low|medium|high|xhigh|max>] [prompt]",
-      "  node scripts/claude-companion.mjs status [job-id] [--all] [--json]",
-      "  node scripts/claude-companion.mjs result [job-id] [--json]",
-      "  node scripts/claude-companion.mjs cancel [job-id] [--json]",
-      "  node scripts/claude-companion.mjs session-routing-context [--cwd <path>] [--json]",
-      "  node scripts/claude-companion.mjs background-routing-context --kind <review|task> [--cwd <path>] [--json]",
-      "  node scripts/claude-companion.mjs task-resume-candidate [--json]",
-      "  node scripts/claude-companion.mjs task-reserve-job [--json]",
-      "  node scripts/claude-companion.mjs review-reserve-job [--json]"
+      "  node scripts/agy-companion.mjs setup [--enable-review-gate|--disable-review-gate] [--json]",
+      "  node scripts/agy-companion.mjs review [--wait|--background] [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [--effort <low|medium|high>]",
+      "  node scripts/agy-companion.mjs adversarial-review [--wait|--background] [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [--effort <low|medium|high>] [focus text]",
+      "  node scripts/agy-companion.mjs task [--background] [--write] [--resume-last|--resume|--fresh] [--model <model>] [--effort <low|medium|high>] [prompt]",
+      "  node scripts/agy-companion.mjs status [job-id] [--all] [--json]",
+      "  node scripts/agy-companion.mjs result [job-id] [--json]",
+      "  node scripts/agy-companion.mjs cancel [job-id] [--json]",
+      "  node scripts/agy-companion.mjs session-routing-context [--cwd <path>] [--json]",
+      "  node scripts/agy-companion.mjs background-routing-context --kind <review|task> [--cwd <path>] [--json]",
+      "  node scripts/agy-companion.mjs task-resume-candidate [--json]",
+      "  node scripts/agy-companion.mjs task-reserve-job [--json]",
+      "  node scripts/agy-companion.mjs review-reserve-job [--json]"
     ].join("\n")
   );
 }
@@ -194,11 +188,11 @@ function resolveExplicitJobId(value, workspaceRoot) {
   }
   const safeJobId = sanitizeId(explicitJobId, "job ID");
   if (readStoredJob(workspaceRoot, safeJobId)) {
-    throw new Error(`Claude Code job id ${safeJobId} already exists.`);
+    throw new Error(`Antigravity job id ${safeJobId} already exists.`);
   }
   if (!fs.existsSync(resolveReservedJobFile(workspaceRoot, safeJobId))) {
     throw new Error(
-      `Claude Code job id ${safeJobId} is not reserved. Reserve one with the companion reserve-job helper before reusing it.`
+      `Antigravity job id ${safeJobId} is not reserved. Reserve one with the companion reserve-job helper before reusing it.`
     );
   }
   return safeJobId;
@@ -249,13 +243,17 @@ function alignCurrentSessionToOwner(workspaceRoot, ownerSessionId) {
 
 /**
  * Refuse delegation from a Codex thread that is itself driven by an external
- * host (e.g. a headless review thread spawned by Claude Code). Delegating back
- * to Claude Code from there loops the work between the two assistants.
+ * host (e.g. a headless review thread spawned by another assistant).
+ * Delegating back to that host from here loops the work between the two
+ * assistants.
  *
  * Interactive Codex sessions receive SESSION_ID_ENV through the session hook's
  * env-file export; externally hosted app-server threads do not (measured), so
  * an absent env session id plus a `hostOrigin` stamp on the current-session
- * marker identifies the loop. Fail-open everywhere else.
+ * marker identifies the loop. Fail-open everywhere else. Today the only known
+ * external host was Claude Code (env: CLAUDECODE / CLAUDE_CODE_ENTRYPOINT);
+ * the Antigravity CLI has no equivalent host marker, so detectExternalHostOrigin
+ * returns null and this guard stays dormant until a host marker exists.
  */
 function assertDelegationAllowed(workspaceRoot, ownerSessionId, workLabel) {
   if (process.env[SESSION_ID_ENV]) {
@@ -344,7 +342,7 @@ function firstMeaningfulLine(text, fallback) {
   return line ?? fallback;
 }
 
-function resolveClaudeExitStatus(result) {
+function resolveAgyExitStatus(result) {
   const exitCode = Number.isInteger(result?.exitCode) ? result.exitCode : null;
   if (result?.status === "completed") {
     return exitCode ?? 0;
@@ -390,7 +388,7 @@ function configureNativePluginHooks() {
 function shouldRepairPluginHookTrust() {
   return (
     Boolean(resolvePluginCacheInstallInfo()) ||
-    process.env.CC_PLUGIN_CODEX_FORCE_HOOK_TRUST === "1"
+    process.env.AGY_PLUGIN_CODEX_FORCE_HOOK_TRUST === "1"
   );
 }
 
@@ -412,7 +410,7 @@ function isCurrentPluginHook(hook, pluginInfo) {
   if (pluginInfo?.pluginId && hook.pluginId !== pluginInfo.pluginId) {
     return false;
   }
-  if (pluginInfo == null && typeof hook.pluginId === "string" && !hook.pluginId.startsWith("cc@")) {
+  if (pluginInfo == null && typeof hook.pluginId === "string" && !/^(agy|cc)@/.test(hook.pluginId)) {
     return false;
   }
   return pathIsInsideRoot(hook.sourcePath);
@@ -542,16 +540,17 @@ function checkHooksStatus() {
   };
 }
 
-function ensureClaudeReady(cwd) {
-  const authStatus = getClaudeAuthStatus(cwd);
-  if (!authStatus.available) {
+function ensureAgyReady(cwd) {
+  const binaryStatus = getAgyAvailability(cwd);
+  if (!binaryStatus.available) {
     throw new Error(
-      "Claude Code CLI is not installed or is missing required runtime support. Install it, then rerun `$cc:setup`."
+      "Antigravity CLI (agy) is not installed or is missing required runtime support. Install it, then rerun `$agy:setup`."
     );
   }
+  const authStatus = getAgyAuthStatus(cwd);
   if (!authStatus.loggedIn) {
     throw new Error(
-      "Claude Code CLI is not authenticated. Run `claude auth login` and retry."
+      "Antigravity CLI is not authenticated. Run `agy` once and complete Google sign-in, then retry."
     );
   }
 }
@@ -568,45 +567,45 @@ function buildSetupReport(
   } = {}
 ) {
   const nodeStatus = binaryAvailable("node", ["--version"], { cwd });
-  const claudeStatus = getClaudeAvailability(cwd);
-  const authStatus = getClaudeAuthStatus(cwd);
+  const agyStatus = getAgyAvailability(cwd);
+  const authStatus = getAgyAuthStatus(cwd);
   const hooksStatus = checkHooksStatus();
   const config = pluginStateReady ? pluginConfig : null;
 
   const nextSteps = [];
-  if (!claudeStatus.available) {
-    nextSteps.push("Install Claude Code CLI.");
+  if (!agyStatus.available) {
+    nextSteps.push("Install the Antigravity CLI (agy).");
   }
-  if (claudeStatus.available && !authStatus.loggedIn) {
-    nextSteps.push("Run `claude auth login`.");
+  if (agyStatus.available && !authStatus.loggedIn) {
+    nextSteps.push("Run `agy` once and complete Google sign-in.");
   }
   if (!hooksStatus.installed) {
-    nextSteps.push("Run `$cc:setup` again after enabling native Codex plugin hooks.");
+    nextSteps.push("Run `$agy:setup` again after enabling native Codex plugin hooks.");
   }
   if (hookTrust?.ready === false) {
-    nextSteps.push("Open `/hooks` and trust this plugin's hooks manually, then rerun `$cc:setup`.");
+    nextSteps.push("Open `/hooks` and trust this plugin's hooks manually, then rerun `$agy:setup`.");
   }
   if (!pluginStateReady) {
     nextSteps.push(
       pluginStateNextStep ??
-        "Repair plugin-data write access, then rerun `$cc:setup`."
+        "Repair plugin-data write access, then rerun `$agy:setup`."
     );
   } else if (!config?.stopReviewGate) {
     nextSteps.push(
-      "Optional: run `$cc:setup --enable-review-gate` to require a fresh Claude review before each edit-producing Codex turn finishes."
+      "Optional: run `$agy:setup --enable-review-gate` to require a fresh Antigravity review before each edit-producing Codex turn finishes."
     );
   }
 
   return {
     ready:
       nodeStatus.available &&
-      claudeStatus.available &&
+      agyStatus.available &&
       authStatus.loggedIn &&
       hooksStatus.installed &&
       hookTrust?.ready !== false &&
       pluginStateReady,
     node: nodeStatus,
-    claude: claudeStatus,
+    agy: agyStatus,
     auth: authStatus,
     hooks: hooksStatus,
     hookTrust,
@@ -663,7 +662,7 @@ async function handleSetup(argv) {
       error instanceof Error ? error.message : String(error)
     }`;
     pluginStateNextStep =
-      "Restart Codex so the plugin-data writable roots take effect, then rerun `$cc:setup`.";
+      "Restart Codex so the plugin-data writable roots take effect, then rerun `$agy:setup`.";
   };
   try {
     writableRootChanged = await ensureCodexWritableRoots(cwd, pluginDataRoots);
@@ -675,14 +674,14 @@ async function handleSetup(argv) {
     pluginStateNextStep =
       `Allow ${pluginDataRoots.join(", ")} under ` +
       "`sandbox_workspace_write.writable_roots` in `~/.codex/config.toml`, " +
-      "restart Codex, then rerun `$cc:setup`.";
+      "restart Codex, then rerun `$agy:setup`.";
   }
   if (writableRootChanged) {
     pluginStateReady = false;
     pluginStateDetail =
       `plugin data roots added; restart required: ${pluginDataRoots.join(", ")}`;
     pluginStateNextStep =
-      "Restart Codex so the new plugin-data writable root takes effect, then rerun `$cc:setup`.";
+      "Restart Codex so the new plugin-data writable root takes effect, then rerun `$agy:setup`.";
     actionsTaken.push(
       `Allowed plugin state writes under ${pluginDataRoots.join(", ")}.`
     );
@@ -772,13 +771,11 @@ function buildReviewPrompt(context) {
 // ---------------------------------------------------------------------------
 
 async function executeReviewRun(request) {
-  ensureClaudeReady(request.cwd);
+  ensureAgyReady(request.cwd);
   ensureGitRepository(request.cwd);
 
-  // Sweep dead resources from previous crashed runs before allocating new ones.
+  // Sweep dead worktrees from previous crashed runs before allocating new ones.
   try { pruneStaleReviewWorktrees(request.cwd); } catch {}
-  try { pruneStaleSandboxSettings(); } catch {}
-  try { pruneStaleReviewMcpConfigs(); } catch {}
 
   const target = resolveReviewTarget(request.cwd, {
     base: request.base,
@@ -788,40 +785,26 @@ async function executeReviewRun(request) {
   const reviewName = request.reviewName ?? "Review";
 
   if (reviewName === "Review") {
-    // Standard review via Claude CLI — read-only sandbox + ephemeral worktree.
+    // Standard review via agy `--mode plan` (read-only) in an ephemeral worktree.
     const context = collectReviewContext(request.cwd, target);
     const prompt = buildReviewPrompt(context);
     let result;
-    const sandboxSettingsFile = createSandboxSettings("read-only");
+    const isolation = createReviewIsolation(request.cwd, target, { label: "review" });
     try {
-      const isolation = createReviewIsolation(request.cwd, target, { label: "review" });
-      try {
-        const mcpConfigFile = createReviewMcpConfig(isolation.gitRoot);
-        try {
-          result = await runClaudeReview(isolation.cwd, prompt, {
-            model: request.model,
-            effort: request.effort,
-            onProgress: request.onProgress,
-            onSpawn: request.onSpawn,
-            permissionMode: "dontAsk",
-            settingsFile: sandboxSettingsFile,
-            mcpConfigFile,
-            strictMcpConfig: true,
-          });
-        } finally {
-          cleanupReviewMcpConfig(mcpConfigFile);
-        }
-      } finally {
-        isolation.cleanup();
-      }
+      result = await runAgyReview(isolation.cwd, prompt, {
+        model: request.model,
+        effort: request.effort,
+        onProgress: request.onProgress,
+        onSpawn: request.onSpawn,
+      });
     } finally {
-      cleanupSandboxSettings(sandboxSettingsFile);
+      isolation.cleanup();
     }
 
     const payload = {
       review: reviewName,
       target,
-      sessionId: result.sessionId,
+      conversationId: result.conversationId,
       codex: {
         status: result.status,
         warning: result.warning ?? null,
@@ -830,7 +813,7 @@ async function executeReviewRun(request) {
       }
     };
     const rendered = [
-      `# Claude Code ${reviewName}`,
+      `# Antigravity ${reviewName}`,
       "",
       `Target: ${target.label}`,
       "",
@@ -839,8 +822,8 @@ async function executeReviewRun(request) {
     ].join("\n");
 
     return {
-      exitStatus: resolveClaudeExitStatus(result),
-      threadId: result.sessionId,
+      exitStatus: resolveAgyExitStatus(result),
+      threadId: result.conversationId,
       turnId: null,
       payload,
       rendered,
@@ -848,48 +831,30 @@ async function executeReviewRun(request) {
         typeof result.result === "string" ? result.result : "",
         `${reviewName} completed.`
       ),
-      jobTitle: `Claude Code ${reviewName}`,
+      jobTitle: `Antigravity ${reviewName}`,
       jobClass: "review",
       targetLabel: target.label
     };
   }
 
-  // Adversarial review with structured output — read-only sandbox + ephemeral worktree.
+  // Adversarial review with structured output — agy `--mode plan` + JSON schema
+  // in an ephemeral worktree.
   const context = collectReviewContext(request.cwd, target);
   const prompt = buildAdversarialReviewPrompt(context, focusText);
   const schema = readOutputSchema(REVIEW_SCHEMA_PATH);
   let result;
-  const sandboxSettingsFile = createSandboxSettings("read-only");
+  const isolation = createReviewIsolation(context.repoRoot, target, {
+    label: "adversarial-review",
+  });
   try {
-    const isolation = createReviewIsolation(context.repoRoot, target, {
-      label: "adversarial-review",
+    result = await runAgyAdversarialReview(isolation.cwd, prompt, schema, {
+      model: request.model,
+      effort: request.effort,
+      onProgress: request.onProgress,
+      onSpawn: request.onSpawn,
     });
-    try {
-      const mcpConfigFile = createReviewMcpConfig(isolation.gitRoot);
-      try {
-        result = await runClaudeAdversarialReview(
-          isolation.cwd,
-          prompt,
-          schema,
-          {
-            model: request.model,
-            effort: request.effort,
-            onProgress: request.onProgress,
-            onSpawn: request.onSpawn,
-            permissionMode: "dontAsk",
-            settingsFile: sandboxSettingsFile,
-            mcpConfigFile,
-            strictMcpConfig: true,
-          }
-        );
-      } finally {
-        cleanupReviewMcpConfig(mcpConfigFile);
-      }
-    } finally {
-      isolation.cleanup();
-    }
   } finally {
-    cleanupSandboxSettings(sandboxSettingsFile);
+    isolation.cleanup();
   }
 
   const parsed = parseStructuredOutput(
@@ -917,7 +882,7 @@ async function executeReviewRun(request) {
   const payload = {
     review: reviewName,
     target,
-    sessionId: result.sessionId,
+    conversationId: result.conversationId,
     context: {
       repoRoot: context.repoRoot,
       branch: context.branch,
@@ -935,8 +900,8 @@ async function executeReviewRun(request) {
   };
 
   return {
-    exitStatus: resolveClaudeExitStatus(result),
-    threadId: result.sessionId,
+    exitStatus: resolveAgyExitStatus(result),
+    threadId: result.conversationId,
     turnId: null,
     payload,
     rendered: renderReviewResult(parsed, {
@@ -950,7 +915,7 @@ async function executeReviewRun(request) {
         typeof result.result === "string" ? result.result : "",
         parsed.parseError ?? `${reviewName} finished.`
       ),
-    jobTitle: `Claude Code ${reviewName}`,
+    jobTitle: `Antigravity ${reviewName}`,
     jobClass: "review",
     targetLabel: context.target.label
   };
@@ -966,12 +931,12 @@ function buildTaskRunMetadata({ prompt, resumeLast = false }) {
     String(prompt ?? "").includes(STOP_REVIEW_TASK_MARKER)
   ) {
     return {
-      title: "Claude Code Turn-End Gate Review",
+      title: "Antigravity Turn-End Gate Review",
       summary: "Turn-end gate review of previous Codex turn"
     };
   }
 
-  const title = resumeLast ? "Claude Code Resume" : "Claude Code Task";
+  const title = resumeLast ? "Antigravity Resume" : "Antigravity Task";
   const fallbackSummary = resumeLast ? "Continue previous task" : "Task";
   return {
     title,
@@ -981,53 +946,38 @@ function buildTaskRunMetadata({ prompt, resumeLast = false }) {
 
 async function executeTaskRun(request) {
   const workspaceRoot = resolveWorkspaceRoot(request.cwd);
-  ensureClaudeReady(request.cwd);
+  ensureAgyReady(request.cwd);
 
   const taskMetadata = buildTaskRunMetadata({
     prompt: request.prompt,
     resumeLast: request.resumeLast
   });
 
-  // Sandbox mode mirrors Codex conventions:
-  //   --write  → workspace-write: all tools, OS sandbox limits writes to cwd+/tmp, no network
-  //   default  → read-only:       read+web tools only, OS sandbox limits writes to /tmp, no network
-  // Permission modes: dontAsk enforces allowedTools; bypassPermissions ignores them.
-  const sandboxMode = request.write ? "workspace-write" : "read-only";
-  const sandboxSettingsFile = createSandboxSettings(sandboxMode);
-
-  const claudeOptions = {
+  // agy execution modes mirror Codex conventions:
+  //   --write  → accept-edits: the delegated run may edit the workspace
+  //   default  → plan:        read-only, cannot modify the workspace
+  const agyOptions = {
     model: request.model ?? undefined,
     effort: request.effort ?? undefined,
-    permissionMode: request.write ? "bypassPermissions" : "dontAsk",
-    settingsFile: sandboxSettingsFile,
+    mode: request.write ? "accept-edits" : "plan",
   };
 
-  // workspace-write: all tools (no allowedTools = everything including MCP/Skill/Agent)
-  // read-only: strict whitelist — read + web only, no MCP/Skill/Agent
-  if (!request.write) {
-    claudeOptions.allowedTools = SANDBOX_READ_ONLY_TOOLS;
+  // Conversation resume support
+  if (request.resumeLast && request.resumeConversationId) {
+    agyOptions.conversationId = request.resumeConversationId;
   }
 
-  // Session resume support
-  if (request.resumeLast && request.resumeSessionId) {
-    claudeOptions.resumeSessionId = request.resumeSessionId;
-  }
-
-  if (!request.prompt && !request.resumeSessionId) {
+  if (!request.prompt && !request.resumeConversationId) {
     throw new Error("Provide a prompt, a prompt file, piped stdin, or use --resume-last.");
   }
 
   const prompt = request.prompt || "Continue where you left off.";
   let result;
-  try {
-    result = await runClaudeTurn(workspaceRoot, prompt, {
-      ...claudeOptions,
-      onProgress: request.onProgress,
-      onSpawn: request.onSpawn,
-    });
-  } finally {
-    cleanupSandboxSettings(sandboxSettingsFile);
-  }
+  result = await runAgyTurn(workspaceRoot, prompt, {
+    ...agyOptions,
+    onProgress: request.onProgress,
+    onSpawn: request.onSpawn,
+  });
 
   const rawOutput =
     typeof result.finalMessage === "string" ? result.finalMessage : "";
@@ -1040,19 +990,14 @@ async function executeTaskRun(request) {
   const payload = {
     status: result.status,
     warning: result.warning ?? null,
-    sessionId: result.sessionId,
+    conversationId: result.conversationId,
     rawOutput,
-    touchedFiles: Array.isArray(result.touchedFiles)
-      ? result.touchedFiles
-      : result.toolUses
-          .filter((t) => t.tool === "Write" || t.tool === "Edit")
-          .map((t) => t.input?.file_path ?? t.input?.path)
-          .filter(Boolean)
+    touchedFiles: Array.isArray(result.touchedFiles) ? result.touchedFiles : []
   };
 
   return {
-    exitStatus: resolveClaudeExitStatus(result),
-    threadId: result.sessionId,
+    exitStatus: resolveAgyExitStatus(result),
+    threadId: result.conversationId,
     turnId: null,
     payload,
     rendered,
@@ -1081,8 +1026,8 @@ function buildReviewJobMetadata(reviewName, target) {
         : "review",
     title:
       reviewName === "Review"
-        ? "Claude Code Review"
-        : `Claude Code ${reviewName}`,
+        ? "Antigravity Review"
+        : `Antigravity ${reviewName}`,
     summary: `${reviewName} ${target.label}`
   };
 }
@@ -1144,7 +1089,7 @@ function reserveUniqueJobId(workspaceRoot, prefix, label) {
     }
     return candidate;
   }
-  throw new Error(`Failed to reserve a unique Claude Code ${label} job id.`);
+  throw new Error(`Failed to reserve a unique Antigravity ${label} job id.`);
 }
 
 function releaseReservedJobId(workspaceRoot, jobId) {
@@ -1180,7 +1125,7 @@ function buildReviewRequest({
 }
 
 function spawnDetachedWorker(cwd, command, jobId, logFile) {
-  const scriptPath = path.join(ROOT_DIR, "scripts", "claude-companion.mjs");
+  const scriptPath = path.join(ROOT_DIR, "scripts", "agy-companion.mjs");
   const workerLog = createWorkerLogStdio(logFile);
   try {
     const child = spawn(
@@ -1266,7 +1211,7 @@ function buildTaskRequest({
   prompt,
   write,
   resumeLast,
-  resumeSessionId,
+  resumeConversationId,
   jobId,
   markViewedOnSuccess
 }) {
@@ -1277,7 +1222,7 @@ function buildTaskRequest({
     prompt,
     write,
     resumeLast,
-    resumeSessionId,
+    resumeConversationId,
     jobId,
     markViewedOnSuccess
   };
@@ -1303,8 +1248,8 @@ function requireTaskRequest(prompt, resumeLast) {
 function renderQueuedTaskLaunch(payload) {
   return [
     `${payload.title} started in the background as ${payload.jobId}.`,
-    `Check $cc:status ${payload.jobId} for progress.`,
-    `Once it finishes, we'll point you to the result. You can also open it directly with $cc:result ${payload.jobId}.`,
+    `Check $agy:status ${payload.jobId} for progress.`,
+    `Once it finishes, we'll point you to the result. You can also open it directly with $agy:result ${payload.jobId}.`,
     ""
   ].join("\n");
 }
@@ -1494,7 +1439,7 @@ async function resolveLatestResumableSession(cwd, options = {}) {
   );
   if (activeTask) {
     throw new Error(
-      `Task ${activeTask.id} is still running. Use $cc:status before continuing it.`
+      `Task ${activeTask.id} is still running. Use $agy:status before continuing it.`
     );
   }
 
@@ -1660,7 +1605,7 @@ async function handleTask(argv) {
   if (!prompt && !resumeLast) {
     throw new Error("Provide a prompt, a prompt file, piped stdin, or use --resume.");
   }
-  ensureClaudeReady(cwd);
+  ensureAgyReady(cwd);
 
   const write = Boolean(options.write);
   const ownerSessionId = resolveOwnerSessionId(options["owner-session-id"]);
@@ -1673,13 +1618,13 @@ async function handleTask(argv) {
     });
     alignCurrentSessionToOwner(workspaceRoot, ownerSessionId);
 
-    // Resolve resume session inside the reservation guard so failures do not leak markers.
-    let resumeSessionId = null;
+    // Resolve resume conversation inside the reservation guard so failures do not leak markers.
+    let resumeConversationId = null;
     if (resumeLast) {
-      resumeSessionId = await resolveLatestResumableSession(workspaceRoot);
-      if (!resumeSessionId) {
+      resumeConversationId = await resolveLatestResumableSession(workspaceRoot);
+      if (!resumeConversationId) {
         throw new Error(
-          "No previous Claude Code task session was found for this repository."
+          "No previous Antigravity task conversation was found for this repository."
         );
       }
     }
@@ -1704,7 +1649,7 @@ async function handleTask(argv) {
         prompt,
         write,
         resumeLast,
-        resumeSessionId,
+        resumeConversationId,
         jobId: job.id,
         markViewedOnSuccess
       });
@@ -1727,7 +1672,7 @@ async function handleTask(argv) {
           prompt,
           write,
           resumeLast,
-          resumeSessionId,
+          resumeConversationId,
           onSpawn,
           jobId: job.id,
           onProgress: progress
@@ -2061,7 +2006,7 @@ async function handleCancel(argv) {
         note: "Refusing to cancel a stored process without a PID identity.",
       };
     } else {
-      cancelResult = await cancelClaudeProcess(pid, pidIdentity);
+      cancelResult = await cancelAgyProcess(pid, pidIdentity);
     }
     appendLogLine(
       jobLogFile,
@@ -2162,18 +2107,9 @@ async function main() {
     case "cancel":
       await handleCancel(argv);
       break;
-    case "mcp-git":
-      await handleMcpGit(argv);
-      break;
     default:
       throw new Error(`Unknown subcommand: ${subcommand}`);
   }
-}
-
-async function handleMcpGit(_argv) {
-  const { runMcpGitServer } = await import("./lib/mcp-git.mjs");
-  const exitCode = await runMcpGitServer();
-  process.exit(exitCode ?? 0);
 }
 
 main().catch((error) => {

@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 /**
@@ -128,18 +128,18 @@ function cleanupWorktreeDir(worktreePath) {
  *
  * For branch reviews we run inside an ephemeral worktree checked out at the
  * branch tip: that gives us mutation isolation without losing any of the
- * commits Claude needs to inspect.
+ * commits the review needs to inspect.
  *
  * For working-tree reviews we deliberately *do not* create a worktree. A
  * worktree-from-HEAD would hide the very staged/unstaged/untracked changes
  * that the reviewer is supposed to inspect — `git status` would report clean,
- * `git diff` would show nothing, and the MCP server pointed at the worktree
- * would mislead Claude into thinking the repo is unchanged. Instead we run in
- * the original repo and rely on the Bash-free allowlist for containment.
+ * `git diff` would show nothing, and a reviewer pointed at the worktree
+ * would mislead the model into thinking the repo is unchanged. Instead we run
+ * in the original repo and rely on agy `--mode plan` (read-only) for
+ * containment.
  *
- * Returns `{ cwd, gitRoot, cleanup }`. `gitRoot` is the path the MCP git server
- * should be rooted at; `cwd` is what the Claude CLI should treat as the
- * working directory.
+ * Returns `{ cwd, cleanup }`. `cwd` is what agy should treat as the working
+ * directory.
  */
 export function createReviewIsolation(repoRoot, target, { label = "review" } = {}) {
   if (target?.mode === "working-tree") {

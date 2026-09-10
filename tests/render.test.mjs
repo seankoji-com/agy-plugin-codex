@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Sendbird, Inc.
+ * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, it } from "node:test";
@@ -140,6 +140,7 @@ describe("renderSetupReport", () => {
     ready: true,
     node: { detail: "v20.0.0" },
     claude: { detail: "installed" },
+    agy: { detail: "installed" },
     auth: { detail: "authenticated" },
     hooks: { detail: "Codex hooks installed" },
     reviewGateEnabled: false,
@@ -150,7 +151,7 @@ describe("renderSetupReport", () => {
   it("renders ready status", () => {
     const output = renderSetupReport(baseReport);
     assert.ok(output.includes("Status: ready"));
-    assert.ok(output.includes("# Claude Code Setup"));
+    assert.ok(output.includes("# Antigravity Setup"));
   });
 
   it("renders not-ready status", () => {
@@ -161,6 +162,7 @@ describe("renderSetupReport", () => {
   it("includes check details", () => {
     const output = renderSetupReport(baseReport);
     assert.ok(output.includes("- node: v20.0.0"));
+    assert.ok(output.includes("- agy: installed"));
     assert.ok(output.includes("- auth: authenticated"));
     assert.ok(output.includes("- hooks: Codex hooks installed"));
   });
@@ -203,10 +205,10 @@ describe("renderSetupReport", () => {
   });
 
   it("includes next steps", () => {
-    const report = { ...baseReport, nextSteps: ["Run claude auth"] };
+    const report = { ...baseReport, nextSteps: ["Run agy once and sign in"] };
     const output = renderSetupReport(report);
     assert.ok(output.includes("Next steps:"));
-    assert.ok(output.includes("- Run claude auth"));
+    assert.ok(output.includes("- Run agy once and sign in"));
   });
 
   it("ends with newline", () => {
@@ -361,7 +363,7 @@ describe("renderStatusReport", () => {
       needsReview: false,
     };
     const output = renderStatusReport(report);
-    assert.equal(output, "No Claude Code jobs recorded yet.\n");
+    assert.equal(output, "No Antigravity jobs recorded yet.\n");
   });
 
   it("renders overview as a compact markdown table", () => {
@@ -404,9 +406,9 @@ describe("renderStatusReport", () => {
     };
     const output = renderStatusReport(report);
     assert.ok(output.startsWith("| Job | Kind | Status | Phase | Started | Ended | Elapsed/Duration | Summary | Actions |"));
-    assert.ok(output.includes("`$cc:status j1`"));
-    assert.ok(output.includes("`$cc:cancel j1`"));
-    assert.ok(output.includes("`$cc:result j2`"));
+    assert.ok(output.includes("`$agy:status j1`"));
+    assert.ok(output.includes("`$agy:cancel j1`"));
+    assert.ok(output.includes("`$agy:result j2`"));
     assert.ok(output.includes("2026-04-02T19:00:00.000Z"));
     assert.ok(output.indexOf("j1") < output.indexOf("j2"));
     assert.ok(output.indexOf("j2") < output.indexOf("j3"));
@@ -482,7 +484,7 @@ describe("renderJobStatusReport", () => {
       threadId: "claude-sess",
     };
     const output = renderJobStatusReport(job);
-    assert.ok(output.includes("# Claude Code Job Status"));
+    assert.ok(output.includes("# Antigravity Job Status"));
     assert.ok(output.includes("| Field | Value |"));
     assert.ok(output.includes("| Job | `j1` |"));
     assert.ok(output.includes("| Kind | review |"));
@@ -490,10 +492,10 @@ describe("renderJobStatusReport", () => {
     assert.ok(output.includes("| Started | 2026-04-02T19:00:00.000Z |"));
     assert.ok(output.includes("| Ended | 2026-04-02T19:01:00.000Z |"));
     assert.ok(output.includes("| Duration | 1m |"));
-    assert.ok(output.includes("| Result | `$cc:result j1` |"));
-    assert.ok(output.includes("| Claude Code session | `claude-sess` |"));
+    assert.ok(output.includes("| Result | `$agy:result j1` |"));
+    assert.ok(output.includes("| Antigravity conversation | `claude-sess` |"));
     assert.ok(output.includes("| Owning Codex session | `owner-sess` |"));
-    assert.ok(output.includes("| Resume | `claude --resume claude-sess` |"));
+    assert.ok(output.includes("| Resume | `agy --conversation claude-sess` |"));
   });
 
   it("shows cancel action for active jobs", () => {
@@ -507,7 +509,7 @@ describe("renderJobStatusReport", () => {
     };
     const output = renderJobStatusReport(job);
     assert.ok(output.includes("| Elapsed | 5s |"));
-    assert.ok(output.includes("| Cancel | `$cc:cancel j2` |"));
+    assert.ok(output.includes("| Cancel | `$agy:cancel j2` |"));
   });
 });
 
@@ -525,12 +527,12 @@ describe("renderStoredJobResult", () => {
     };
     const output = renderStoredJobResult(job, stored);
     assert.ok(output.includes("Review output here."));
-    assert.ok(output.includes("Claude Code session: claude-sess"));
+    assert.ok(output.includes("Antigravity conversation: claude-sess"));
     assert.ok(output.includes("Owning Codex session: owner-sess"));
-    assert.ok(output.includes("claude --resume claude-sess"));
+    assert.ok(output.includes("agy --conversation claude-sess"));
   });
 
-  it("does not treat the owning Codex session as a Claude resume target", () => {
+  it("does not treat the owning Codex session as a Antigravity resume target", () => {
     const job = { id: "j1", sessionId: "owner-sess" };
     const stored = {
       sessionId: "owner-sess",
@@ -538,21 +540,21 @@ describe("renderStoredJobResult", () => {
     };
     const output = renderStoredJobResult(job, stored);
     assert.ok(output.includes("Owning Codex session: owner-sess"));
-    assert.ok(!output.includes("Claude Code session: owner-sess"));
-    assert.ok(!output.includes("claude --resume owner-sess"));
+    assert.ok(!output.includes("Antigravity conversation: owner-sess"));
+    assert.ok(!output.includes("agy --conversation owner-sess"));
   });
 
   it("returns rendered content for plain standard reviews", () => {
-    const job = { id: "j1", status: "completed", title: "Claude Code Review" };
+    const job = { id: "j1", status: "completed", title: "Antigravity Review" };
     const stored = {
       result: {
         review: "Review",
         codex: { stdout: "# Code Review\n\nLooks good." },
       },
-      rendered: "# Claude Code Review\n\nTarget: working tree diff\n\nLooks good.\n",
+      rendered: "# Antigravity Review\n\nTarget: working tree diff\n\nLooks good.\n",
     };
     const output = renderStoredJobResult(job, stored);
-    assert.equal(output, "# Claude Code Review\n\nTarget: working tree diff\n\nLooks good.\n");
+    assert.equal(output, "# Antigravity Review\n\nTarget: working tree diff\n\nLooks good.\n");
   });
 
   it("returns rawOutput if no rendered", () => {
@@ -614,7 +616,7 @@ describe("renderCancelReport", () => {
   it("renders basic cancel confirmation", () => {
     const output = renderCancelReport({ id: "j1" });
     assert.ok(output.includes("Cancelled j1"));
-    assert.ok(output.includes("$cc:status"));
+    assert.ok(output.includes("$agy:status"));
   });
 
   it("includes title and summary if present", () => {
