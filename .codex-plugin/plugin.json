@@ -1,6 +1,6 @@
 {
   "name": "agy",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Antigravity (agy) Plugin for Codex. Delegate code reviews, investigations, and tracked tasks to Gemini via the Antigravity CLI from inside Codex.",
   "author": {
     "name": "Sean Koji",

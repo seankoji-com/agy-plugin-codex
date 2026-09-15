@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.0.1
+
+- Keep foreground reviews recoverable after the 120-second wait by persisting one tracked job before execution, returning its job ID with `status` and `result` commands on timeout, and allowing the same Antigravity turn to finish without resubmitting the private diff.
+- Extend tracked review execution to a 30-minute Antigravity print timeout with a 31-minute watchdog, and record cancellation when the foreground companion receives `SIGINT` or `SIGTERM`.
+
 ## v2.0.0
 
 Full port of `sendbird/cc-plugin-codex` (v1.5.0) from the Claude Code CLI to the Google Antigravity CLI (`agy`). This is a breaking rewrite: the plugin now delegates to Gemini via the local `agy` binary over your Google AI Pro subscription instead of to Claude Code. All `$agy:*` commands, the turn-end review gate, the tracked-job runtime, and the on-disk plugin state are retained; the Claude-specific transport and isolation machinery is replaced.

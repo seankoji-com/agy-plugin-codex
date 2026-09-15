@@ -1,6 +1,6 @@
 {
   "name": "agy-plugin-codex",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Antigravity (agy) Plugin for Codex — delegate reviews, audits, and rescue to Gemini via the Antigravity CLI",
   "type": "module",
   "author": {
