@@ -125,6 +125,10 @@ test("internal runtime references keep the active-root and notification invarian
   assert.match(reviewRuntime, /`sandbox_permissions: "require_escalated"`/i);
   assert.match(reviewRuntime, /contact the Antigravity API for this requested review/i);
   assert.match(reviewRuntime, /Do not first try the companion command in the default network-disabled sandbox/i);
+  assert.match(reviewRuntime, /default foreground wait is 120 seconds/i);
+  assert.match(reviewRuntime, /timeout exits 124 and includes the tracked job id/i);
+  assert.match(reviewRuntime, /Do not retry or resubmit the diff/i);
+  assert.match(reviewRuntime, /receives SIGINT or SIGTERM, it cancels the tracked job/i);
   assert.match(reviewRuntime, /mention the tool name `send_input` literally/i);
   assert.match(reviewRuntime, /exact tool shape `send_input\(\{ target: <parent-thread-id>, message: <steering-message> \}\)`/i);
   assert.match(reviewRuntime, /do not silently drop the completion notification path when the parent provided a non-empty parent thread id/i);
@@ -172,6 +176,8 @@ test("review skills keep background execution outside the companion command", ()
   assert.match(review, /do not invoke a generic review-runner role/i);
   assert.match(review, /Do not fall back to raw `agy` invocations/i);
   assert.match(review, /If the .*companion command fails, surface that failure/i);
+  assert.match(review, /If the companion exits 124, present its timeout output with the tracked job id/i);
+  assert.match(review, /Do not retry or resubmit the diff/i);
   assert.match(review, /For background review, use Codex's built-in `default` subagent/i);
   assert.match(review, /Do not satisfy background review by using a generic review-runner helper role/i);
   assert.match(review, /Never satisfy background review by running the companion command itself with shell backgrounding/i);
@@ -229,6 +235,8 @@ test("review skills keep background execution outside the companion command", ()
   assert.match(adversarial, /do not invoke a generic review-runner role/i);
   assert.match(adversarial, /Do not fall back to raw `agy` invocations/i);
   assert.match(adversarial, /If the .*companion command fails, surface that failure/i);
+  assert.match(adversarial, /If the companion exits 124, present its timeout output with the tracked job id/i);
+  assert.match(adversarial, /Do not retry or resubmit the diff/i);
   assert.match(adversarial, /For background adversarial review, use Codex's built-in `default` subagent/i);
   assert.match(adversarial, /Do not satisfy background adversarial review by using a generic review-runner helper role/i);
   assert.match(adversarial, /Never satisfy background adversarial review by running the companion command itself with shell backgrounding/i);

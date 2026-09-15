@@ -85,6 +85,8 @@ export const MAX_STDERR_BYTES = 64 * 1024;
 
 export const DEFAULT_TURN_TIMEOUT_MS = 120_000;
 export const DEFAULT_STATUS_WAIT_TIMEOUT_MS = 240_000;
+export const TRACKED_REVIEW_PRINT_TIMEOUT = "30m";
+export const TRACKED_REVIEW_WATCHDOG_TIMEOUT_MS = 31 * 60_000;
 
 /**
  * Hard cap on the prompt delivered through argv. Windows process creation
@@ -304,6 +306,7 @@ function resolveTurnResult({
   stderr,
   exitCode,
   timedOut,
+  timeoutMs,
 }) {
   const status = envelopeStatus(envelope);
   const conversationId = envelopeConversationId(envelope);
@@ -315,7 +318,7 @@ function resolveTurnResult({
   if (timedOut) {
     return {
       status: "failed",
-      warning: `agy timed out after ${DEFAULT_TURN_TIMEOUT_MS / 1000}s without completing the turn.`,
+      warning: `agy timed out after ${timeoutMs / 1000}s without completing the turn.`,
       exitCode: null,
       conversationId,
       finalMessage: response,
@@ -479,6 +482,9 @@ export function buildAgyArgs(prompt, options = {}) {
   if (effort) {
     args.push("--effort", effort);
   }
+  if (options.printTimeout) {
+    args.push("--print-timeout", String(options.printTimeout));
+  }
   args.push("--output-format", "json");
 
   // Default to read-only plan mode. Reviews and gates must never be able to
@@ -523,7 +529,11 @@ export function buildAgyArgs(prompt, options = {}) {
  * non-zero exit, service limit, or timeout), "unknown" (no envelope).
  */
 export async function runAgyTurn(cwd, prompt, options = {}) {
-  const timeoutMs = Number(options.timeoutMs) || DEFAULT_TURN_TIMEOUT_MS;
+  const requestedTimeoutMs = Number(options.timeoutMs);
+  const timeoutMs =
+    Number.isFinite(requestedTimeoutMs) && requestedTimeoutMs > 0
+      ? requestedTimeoutMs
+      : DEFAULT_TURN_TIMEOUT_MS;
   const args = buildAgyArgs(prompt, options);
 
   return new Promise((resolve) => {
@@ -598,6 +608,7 @@ export async function runAgyTurn(cwd, prompt, options = {}) {
           stderr,
           exitCode: proc.exitCode,
           timedOut,
+          timeoutMs,
         }),
         pid: proc.pid,
         pidIdentity,

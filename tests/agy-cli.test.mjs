@@ -443,6 +443,8 @@ describe("constants", () => {
     assert.equal(agy.MAX_STDERR_BYTES, 64 * 1024);
     assert.equal(agy.DEFAULT_TURN_TIMEOUT_MS, 120_000);
     assert.equal(agy.DEFAULT_STATUS_WAIT_TIMEOUT_MS, 240_000);
+    assert.equal(agy.TRACKED_REVIEW_PRINT_TIMEOUT, "30m");
+    assert.equal(agy.TRACKED_REVIEW_WATCHDOG_TIMEOUT_MS, 31 * 60_000);
   });
 
   it("MAX_PROMPT_ARG_CHARS is platform-scaled", () => {
@@ -506,6 +508,12 @@ describe("buildAgyArgs", () => {
       JSON.stringify(schema),
       "-p=review it",
     ]);
+  });
+
+  it("forwards the tracked review print timeout before the prompt", () => {
+    const args = agy.buildAgyArgs("review it", { printTimeout: "30m" });
+    assert.equal(args[args.indexOf("--print-timeout") + 1], "30m");
+    assert.equal(args.at(-1), "-p=review it");
   });
 
   it("truncates oversized prompts and appends a marker", () => {

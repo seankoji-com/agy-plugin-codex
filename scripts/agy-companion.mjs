@@ -38,6 +38,7 @@ import {
 } from "./lib/codex-paths.mjs";
 import {
   cancelAgyProcess,
+  DEFAULT_TURN_TIMEOUT_MS,
   getAgyAuthStatus,
   getAgyAvailability,
   resolveDefaultModel,
@@ -46,6 +47,8 @@ import {
   runAgyAdversarialReview,
   runAgyReview,
   runAgyTurn,
+  TRACKED_REVIEW_PRINT_TIMEOUT,
+  TRACKED_REVIEW_WATCHDOG_TIMEOUT_MS,
 } from "./lib/agy-cli.mjs";
 import {
   createReviewIsolation,
@@ -107,6 +110,7 @@ import {
 import { resolveWorkspaceRoot } from "./lib/workspace.mjs";
 import {
   renderReviewResult,
+  renderReviewWaitTimeout,
   renderStoredJobResult,
   renderCancelReport,
   renderJobStatusReport,
@@ -131,8 +135,8 @@ function printUsage() {
     [
       "Usage:",
       "  node scripts/agy-companion.mjs setup [--enable-review-gate|--disable-review-gate] [--json]",
-      "  node scripts/agy-companion.mjs review [--wait|--background] [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [--effort <low|medium|high>]",
-      "  node scripts/agy-companion.mjs adversarial-review [--wait|--background] [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [--effort <low|medium|high>] [focus text]",
+      "  node scripts/agy-companion.mjs review [--wait|--background] [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [--effort <low|medium|high>] [--timeout-ms <ms>]",
+      "  node scripts/agy-companion.mjs adversarial-review [--wait|--background] [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [--effort <low|medium|high>] [--timeout-ms <ms>] [focus text]",
       "  node scripts/agy-companion.mjs task [--background] [--write] [--resume-last|--resume|--fresh] [--model <model>] [--effort <low|medium|high>] [prompt]",
       "  node scripts/agy-companion.mjs status [job-id] [--all] [--json]",
       "  node scripts/agy-companion.mjs result [job-id] [--json]",
@@ -794,6 +798,8 @@ async function executeReviewRun(request) {
       result = await runAgyReview(isolation.cwd, prompt, {
         model: request.model,
         effort: request.effort,
+        printTimeout: TRACKED_REVIEW_PRINT_TIMEOUT,
+        timeoutMs: request.timeoutMs,
         onProgress: request.onProgress,
         onSpawn: request.onSpawn,
       });
@@ -850,6 +856,8 @@ async function executeReviewRun(request) {
     result = await runAgyAdversarialReview(isolation.cwd, prompt, schema, {
       model: request.model,
       effort: request.effort,
+      printTimeout: TRACKED_REVIEW_PRINT_TIMEOUT,
+      timeoutMs: request.timeoutMs,
       onProgress: request.onProgress,
       onSpawn: request.onSpawn,
     });
@@ -1119,9 +1127,10 @@ function buildReviewRequest({
   effort,
   focusText,
   reviewName,
-  markViewedOnSuccess
+  markViewedOnSuccess,
+  timeoutMs
 }) {
-  return { cwd, base, scope, model, effort, focusText, reviewName, markViewedOnSuccess };
+  return { cwd, base, scope, model, effort, focusText, reviewName, markViewedOnSuccess, timeoutMs };
 }
 
 function spawnDetachedWorker(cwd, command, jobId, logFile) {
@@ -1270,6 +1279,17 @@ function resolveMarkViewedOnSuccess(viewState, launchedInBackground = false) {
   );
 }
 
+function resolveForegroundReviewTimeoutMs(value) {
+  if (value == null || String(value).trim() === "") {
+    return DEFAULT_TURN_TIMEOUT_MS;
+  }
+  const timeoutMs = Number(value);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error("--timeout-ms must be a positive number.");
+  }
+  return Math.floor(timeoutMs);
+}
+
 function isActiveJobStatus(status) {
   return ACTIVE_JOB_STATUSES.has(status);
 }
@@ -1332,6 +1352,95 @@ async function runForegroundCommand(job, runner, options = {}) {
     process.exitCode = execution.exitStatus;
   }
   return execution;
+}
+
+async function runForegroundReviewCommand(cwd, job, request, options = {}) {
+  enqueueBackgroundReview(cwd, job, request);
+  process.stderr.write(
+    `[agy] Tracking foreground review as ${job.id}; waiting up to ${options.timeoutMs / 1000}s.\n`
+  );
+  const waitPromise = waitForSingleJobSnapshot(cwd, job.id, {
+    timeoutMs: options.timeoutMs,
+    pollIntervalMs: 100,
+  });
+  let resolveSignal;
+  const signalPromise = new Promise((resolve) => {
+    resolveSignal = resolve;
+  });
+  const onSigint = () => resolveSignal("SIGINT");
+  const onSigterm = () => resolveSignal("SIGTERM");
+  process.once("SIGINT", onSigint);
+  process.once("SIGTERM", onSigterm);
+
+  let snapshot;
+  try {
+    const outcome = await Promise.race([
+      waitPromise.then((value) => ({ snapshot: value })),
+      signalPromise.then((signal) => ({ signal })),
+    ]);
+    if ("signal" in outcome) {
+      const storedJob = readStoredJob(job.workspaceRoot, job.id) ?? job;
+      const cancellation = await cancelTrackedJob(
+        job.workspaceRoot,
+        storedJob,
+        `Cancelled after foreground companion received ${outcome.signal}.`
+      );
+      await waitPromise.catch(() => {});
+      outputCommandResult(
+        { ...cancellation.payload, signal: outcome.signal },
+        renderCancelReport(cancellation.job),
+        options.json
+      );
+      process.exitCode = outcome.signal === "SIGINT" ? 130 : 143;
+      return cancellation.payload;
+    }
+    snapshot = outcome.snapshot;
+  } finally {
+    process.removeListener("SIGINT", onSigint);
+    process.removeListener("SIGTERM", onSigterm);
+  }
+
+  if (snapshot.waitTimedOut) {
+    const payload = {
+      jobId: job.id,
+      status: snapshot.job?.status ?? "running",
+      timedOut: true,
+      timeoutMs: snapshot.timeoutMs,
+      recovery: {
+        status: `$agy:status ${job.id}`,
+        result: `$agy:result ${job.id}`,
+      },
+    };
+    outputCommandResult(
+      payload,
+      renderReviewWaitTimeout(payload),
+      options.json
+    );
+    process.exitCode = 124;
+    return payload;
+  }
+
+  let storedJob = readStoredJob(snapshot.workspaceRoot, job.id);
+  if (storedJob?.status === "completed" && options.markViewedOnSuccess) {
+    storedJob = patchJob(snapshot.workspaceRoot, job.id, {
+      resultViewedAt: nowIso(),
+    }) ?? storedJob;
+  }
+
+  const payload = storedJob?.result ?? {
+    jobId: job.id,
+    status: storedJob?.status ?? snapshot.job.status,
+    error: storedJob?.errorMessage ?? "Antigravity review finished without a stored result.",
+  };
+  outputCommandResult(
+    payload,
+    storedJob?.rendered ?? renderStoredJobResult(snapshot.job, storedJob),
+    options.json
+  );
+  if (storedJob?.status !== "completed") {
+    process.exitCode = 1;
+  }
+  return payload;
 }
 
 // ---------------------------------------------------------------------------
@@ -1463,7 +1572,7 @@ async function resolveLatestResumableSession(cwd, options = {}) {
 
 async function handleReviewCommand(argv, config) {
   const { options, positionals } = parseCommandInput(argv, {
-    valueOptions: ["base", "scope", "model", "effort", "cwd", "view-state", "job-id", "owner-session-id"],
+    valueOptions: ["base", "scope", "model", "effort", "cwd", "view-state", "job-id", "owner-session-id", "timeout-ms"],
     booleanOptions: ["json", "background", "wait"],
     aliasMap: {
       m: "model"
@@ -1483,6 +1592,9 @@ async function handleReviewCommand(argv, config) {
   const markViewedOnSuccess = resolveMarkViewedOnSuccess(
     options["view-state"],
     Boolean(options.background)
+  );
+  const foregroundTimeoutMs = resolveForegroundReviewTimeoutMs(
+    options["timeout-ms"]
   );
 
   const requestedModel = resolveModel(options.model);
@@ -1515,7 +1627,8 @@ async function handleReviewCommand(argv, config) {
         effort: options.effort,
         focusText,
         reviewName: config.reviewName,
-        markViewedOnSuccess
+        markViewedOnSuccess,
+        timeoutMs: TRACKED_REVIEW_WATCHDOG_TIMEOUT_MS
       });
       const { payload } = enqueueBackgroundReview(cwd, job, request);
       outputCommandResult(
@@ -1526,22 +1639,22 @@ async function handleReviewCommand(argv, config) {
       return;
     }
 
-    await runForegroundCommand(
-      job,
-      (progress, onSpawn) =>
-        executeReviewRun({
-          cwd,
-          base: options.base,
-          scope: options.scope,
-          model: resolvedModel,
-          effort: options.effort,
-          focusText,
-          reviewName: config.reviewName,
-          onProgress: progress,
-          onSpawn,
-        }),
-      { json: options.json, markViewedOnSuccess }
-    );
+    const request = buildReviewRequest({
+      cwd,
+      base: options.base,
+      scope: options.scope,
+      model: resolvedModel,
+      effort: options.effort,
+      focusText,
+      reviewName: config.reviewName,
+      markViewedOnSuccess,
+      timeoutMs: TRACKED_REVIEW_WATCHDOG_TIMEOUT_MS,
+    });
+    await runForegroundReviewCommand(cwd, job, request, {
+      json: options.json,
+      markViewedOnSuccess,
+      timeoutMs: foregroundTimeoutMs,
+    });
   });
 }
 
@@ -1965,6 +2078,74 @@ function handleReserveJob(argv, prefix) {
   outputResult(payload, options.json);
 }
 
+async function cancelTrackedJob(workspaceRoot, job, errorMessage) {
+  const existing = readStoredJob(workspaceRoot, job.id) ?? {};
+  const transition = transitionJob(
+    workspaceRoot,
+    job.id,
+    ["running", "queued"],
+    "cancelling"
+  );
+  if (!transition.transitioned) {
+    const status = transition.job?.status ?? job.status;
+    return {
+      job: { ...job, status, phase: status },
+      payload: { jobId: job.id, status, title: job.title },
+    };
+  }
+
+  const pid = existing.pid ?? job.pid;
+  const pidIdentity = existing.pidIdentity ?? null;
+  /** @type {{ cancelled: boolean, note?: string }} */
+  let cancelResult = { cancelled: true, note: "No PID to cancel" };
+  const jobLogFile = resolveJobLogFile(workspaceRoot, job.id);
+
+  if (pid && Number.isFinite(pid)) {
+    cancelResult = pidIdentity
+      ? await cancelAgyProcess(pid, pidIdentity)
+      : {
+          cancelled: false,
+          note: "Refusing to cancel a stored process without a PID identity.",
+        };
+    appendLogLine(
+      jobLogFile,
+      cancelResult.cancelled
+        ? `Process cancelled.${cancelResult.note ? ` ${cancelResult.note}` : ""}`
+        : `Cancel attempt failed.${cancelResult.note ? ` ${cancelResult.note}` : ""}`
+    );
+  }
+
+  const completedAt = nowIso();
+  const status = cancelResult.cancelled ? "cancelled" : "cancel_failed";
+  if (status === "cancelled") {
+    transitionJob(workspaceRoot, job.id, ["cancelling"], "cancelled", {
+      completedAt,
+      errorMessage,
+      pid: null,
+      pidIdentity: null,
+    });
+  } else {
+    transitionJob(workspaceRoot, job.id, ["cancelling"], "cancel_failed", {
+      completedAt,
+      errorMessage: `Cancel failed: ${cancelResult.note ?? "process group still alive"}`,
+      note: cancelResult.note ?? null,
+      pgid: pid,
+    });
+  }
+
+  appendLogLine(jobLogFile, `Cancel result: ${status}`);
+  cleanupOldJobs(workspaceRoot);
+  return {
+    job: { ...job, status, phase: status },
+    payload: {
+      jobId: job.id,
+      status,
+      title: job.title,
+      note: cancelResult.note,
+    },
+  };
+}
+
 async function handleCancel(argv) {
   const { options, positionals } = parseCommandInput(argv, {
     valueOptions: ["cwd"],
@@ -1974,83 +2155,16 @@ async function handleCancel(argv) {
   const cwd = resolveCommandCwd(options);
   const reference = positionals[0] ?? "";
   const { workspaceRoot, job } = resolveCancelableJob(cwd, reference);
-  const existing = readStoredJob(workspaceRoot, job.id) ?? {};
-
-  // CAS: running/queued → cancelling
-  const transition = transitionJob(
+  const cancellation = await cancelTrackedJob(
     workspaceRoot,
-    job.id,
-    ["running", "queued"],
-    "cancelling"
+    job,
+    "Cancelled by user."
   );
-  if (!transition.transitioned) {
-    outputCommandResult(
-      { jobId: job.id, status: job.status },
-      `Job ${job.id} is already ${job.status}.\n`,
-      options.json
-    );
-    return;
-  }
-
-  // Cancel via process group kill with PID identity verification
-  const pid = existing.pid ?? job.pid;
-  const pidIdentity = existing.pidIdentity ?? null;
-  /** @type {{ cancelled: boolean, note?: string }} */
-  let cancelResult = { cancelled: true, note: "No PID to cancel" };
-  const jobLogFile = resolveJobLogFile(workspaceRoot, job.id);
-
-  if (pid && Number.isFinite(pid)) {
-    if (!pidIdentity) {
-      cancelResult = {
-        cancelled: false,
-        note: "Refusing to cancel a stored process without a PID identity.",
-      };
-    } else {
-      cancelResult = await cancelAgyProcess(pid, pidIdentity);
-    }
-    appendLogLine(
-      jobLogFile,
-      cancelResult.cancelled
-        ? `Process cancelled.${cancelResult.note ? ` ${cancelResult.note}` : ""}`
-        : `Cancel attempt failed.${cancelResult.note ? ` ${cancelResult.note}` : ""}`
-    );
-  }
-
-  // Determine final status based on actual cancellation result
-  const completedAt = nowIso();
-  const finalStatus = cancelResult.cancelled ? "cancelled" : "cancel_failed";
-
-  // CAS: cancelling → cancelled/cancel_failed
-  if (finalStatus === "cancelled") {
-    transitionJob(workspaceRoot, job.id, ["cancelling"], "cancelled", {
-      completedAt,
-      errorMessage: "Cancelled by user.",
-      pid: null,
-      pidIdentity: null,
-    });
-  } else {
-    // cancel_failed: PRESERVE PID/PGID for manual cleanup
-    transitionJob(workspaceRoot, job.id, ["cancelling"], "cancel_failed", {
-      completedAt,
-      errorMessage: `Cancel failed: ${cancelResult.note ?? "process group still alive"}`,
-      note: cancelResult.note ?? null,
-      pgid: pid, // Preserve for manual kill hint
-      // Keep pid/pidIdentity for recovery
-    });
-  }
-
-  appendLogLine(jobLogFile, `Cancel result: ${finalStatus}`);
-  cleanupOldJobs(workspaceRoot);
-
-  const nextJob = { ...job, status: finalStatus, phase: finalStatus };
-  const payload = {
-    jobId: job.id,
-    status: finalStatus,
-    title: job.title,
-    note: cancelResult.note,
-  };
-
-  outputCommandResult(payload, renderCancelReport(nextJob), options.json);
+  outputCommandResult(
+    cancellation.payload,
+    renderCancelReport(cancellation.job),
+    options.json
+  );
 }
 
 // ---------------------------------------------------------------------------

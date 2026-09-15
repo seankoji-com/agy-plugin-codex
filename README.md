@@ -122,7 +122,7 @@ $agy:review --background             # run in background, check with $agy:status
 $agy:review --model flash-high       # switch to high-effort flash
 ```
 
-**Flags:** `--base <ref>`, `--scope <auto|working-tree|branch>`, `--wait`, `--background`, `--model <model>`, `--effort <low|medium|high>`
+**Flags:** `--base <ref>`, `--scope <auto|working-tree|branch>`, `--wait`, `--background`, `--model <model>`, `--effort <low|medium|high>`, `--timeout-ms <ms>`
 
 **Defaults:** model `flash-medium` (resolved to `gemini-3.8-flash-medium`), and no effort at all. After trimming surrounding whitespace, the friendly aliases `flash-low`, `flash-medium`, and `flash-high` map to their catalog IDs; every other `--model` value passes through unchanged for agy to resolve, including full model IDs and provider-specific names. `--effort` is forwarded only when you pass it, so each model keeps whatever effort agy defaults to. Antigravity owns which effort levels each model supports.
 
@@ -130,7 +130,9 @@ $agy:review --model flash-high       # switch to high-effort flash
 
 Scope `auto` (the default) inspects `git status` and chooses between working-tree and branch automatically.
 
-In foreground, review returns the result directly. In background, the plugin uses a Codex built-in subagent, tracks the review as a job, and nudges you to open the result when it completes.
+In foreground, the companion tracks one review job and waits up to 120 seconds by default. It returns the verdict directly when ready. If the wait expires, it returns exit code 124 with the job ID and `$agy:status <job-id>` / `$agy:result <job-id>` commands while the same Antigravity turn keeps running. Tracked review workers extend agy's print wait to 30 minutes and retain a 31-minute process watchdog. An explicit SIGINT or SIGTERM cancels the tracked job. Do not submit the diff again. `--timeout-ms` changes only the companion's foreground wait.
+
+In background, the plugin uses a Codex built-in subagent, tracks the review as a job, and nudges you to open the result when it completes.
 
 If the diff is too large to inline safely, the review prompt falls back to concise status/stat context and tells the model to inspect the diff directly with read-only `git diff` commands instead of failing the run.
 
@@ -343,6 +345,17 @@ $agy:status
 $agy:result
 ```
 The built-in notify path is best-effort. The tracked job store and unread hook remain the reliable fallback.
+
+**A foreground review timed out**
+
+Use the job ID from the timeout result:
+
+```text
+$agy:status <job-id>
+$agy:result <job-id>
+```
+
+The timeout ends only the foreground wait. The tracked Antigravity turn continues, so retrying the review would submit the same private diff twice.
 
 If you think the job may belong to an older session in the same repository, use:
 ```text

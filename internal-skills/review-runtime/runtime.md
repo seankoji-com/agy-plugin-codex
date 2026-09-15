@@ -9,7 +9,7 @@ Primary helper:
 - `node "<plugin-root>/scripts/agy-companion.mjs" adversarial-review ...`
 
 Execution boundary:
-- Foreground review stays on the main Codex thread. Do not satisfy foreground review through a review subagent, a generic review-runner role, or any background worker abstraction.
+- Foreground review stays on the main Codex thread. Do not satisfy it through a review subagent or generic review-runner role. The companion itself persists one tracked worker before waiting so a timeout remains recoverable.
 - Background review uses exactly one built-in forwarding child through `spawn_agent`.
 - Never satisfy either mode with raw `agy` invocations, hand-rolled `bash -lc ...agy...`, or detached companion shell backgrounding.
 - If the resolved companion command fails, surface that failure instead of improvising a different executor.
@@ -21,6 +21,10 @@ Foreground contract:
   - `adversarial-review --view-state on-success ...`
 - Run the companion command with `sandbox_permissions: "require_escalated"` and the justification `Allow the Antigravity companion to contact the Antigravity API for this requested review.` Do not first try the companion command in the default network-disabled sandbox.
 - Return companion stdout faithfully and do not add review execution commentary around it.
+- The default foreground wait is 120 seconds. A timeout exits 124 and includes the tracked job id plus `$agy:status <job-id>` and `$agy:result <job-id>` recovery commands.
+- A foreground timeout does not cancel the tracked Antigravity turn. Do not retry or resubmit the diff; recover the existing job.
+- The tracked worker sets agy's print timeout to 30 minutes and keeps a 31-minute process watchdog, so a remote turn can finish after the foreground wait without allowing a hung CLI process to run indefinitely.
+- If the foreground companion receives SIGINT or SIGTERM, it cancels the tracked job and returns the job id with a cancelled result.
 
 Background contract:
 - Use `background-routing-context --kind review --json` before spawning the forwarding child.

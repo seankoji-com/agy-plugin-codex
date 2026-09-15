@@ -59,6 +59,14 @@ async function main() {
   const prompt = (promptArg ?? "").replace(/^-p=/, "");
   const delay = Number((prompt.match(/\\bdelay=(\\d+)\\b/) || [])[1] || 80);
 
+  if (process.env.AGY_INVOCATION_LOG_FILE) {
+    require("node:fs").appendFileSync(
+      process.env.AGY_INVOCATION_LOG_FILE,
+      JSON.stringify({ args, prompt, pid: process.pid }) + "\\n",
+      "utf8"
+    );
+  }
+
   if (process.env.AGY_ARGS_FILE) {
     require("node:fs").writeFileSync(
       process.env.AGY_ARGS_FILE,
@@ -2048,6 +2056,199 @@ describe("agy-companion integration", () => {
 
       assert.match(result.stdout, /Verdict|Findings|Next steps/);
       assert.doesNotMatch(result.stdout, /Could not parse structured JSON output/);
+    } finally {
+      cleanupTestEnvironment(testEnv);
+    }
+  });
+
+  it("keeps a timed-out foreground adversarial review available under one job id", async () => {
+    const testEnv = createTestEnvironment();
+    const invocationLog = path.join(testEnv.rootDir, "agy-invocations.ndjson");
+    const sessionEnv = {
+      ...testEnv.env,
+      [SESSION_ID_ENV]: "session-foreground-timeout",
+      AGY_INVOCATION_LOG_FILE: invocationLog,
+    };
+
+    try {
+      setupGitWorkspace(testEnv.workspaceDir);
+      seedWorkingTreeDiff(testEnv.workspaceDir);
+
+      const timedOut = runCompanionExpectFailure(
+        [
+          "adversarial-review",
+          "--cwd",
+          testEnv.workspaceDir,
+          "--view-state",
+          "on-success",
+          "--timeout-ms",
+          "100",
+          "--json",
+          "delay=350",
+        ],
+        { env: sessionEnv }
+      );
+      assert.equal(timedOut.status, 124);
+      const payload = JSON.parse(timedOut.stdout);
+      assert.match(payload.jobId ?? "", /^review-/);
+      assert.equal(payload.timedOut, true);
+      assert.equal(payload.timeoutMs, 100);
+      assert.equal(payload.recovery.status, `$agy:status ${payload.jobId}`);
+      assert.equal(payload.recovery.result, `$agy:result ${payload.jobId}`);
+      assert.match(timedOut.stderr, new RegExp(payload.jobId));
+
+      const activeJob = readStoredJobById(testEnv, payload.jobId);
+      assert.ok(["queued", "running"].includes(activeJob.status));
+      assert.equal(activeJob.resultViewedAt ?? null, null);
+
+      const result = await waitForTerminalResult(
+        testEnv,
+        payload.jobId,
+        sessionEnv
+      );
+      assert.equal(result.job.status, "completed");
+      assert.equal(result.storedJob.result.result.verdict, "approve");
+
+      const invocations = readJsonLines(invocationLog);
+      assert.equal(invocations.length, 1);
+      assert.equal(
+        invocations[0].args[invocations[0].args.indexOf("--print-timeout") + 1],
+        "30m"
+      );
+    } finally {
+      cleanupTestEnvironment(testEnv);
+    }
+  });
+
+  it("preserves the foreground adversarial review JSON payload shape", () => {
+    const testEnv = createTestEnvironment();
+
+    try {
+      setupGitWorkspace(testEnv.workspaceDir);
+      seedWorkingTreeDiff(testEnv.workspaceDir);
+      const payload = runCompanionJson(
+        [
+          "adversarial-review",
+          "--cwd",
+          testEnv.workspaceDir,
+          "--json",
+        ],
+        { env: testEnv.env }
+      );
+      assert.equal(payload.review, "Adversarial Review");
+      assert.equal(payload.result.verdict, "approve");
+
+      const storedJob = listStoredJobs(testEnv).find(
+        (job) => job.kind === "adversarial-review"
+      );
+      assert.deepEqual(payload, storedJob.result);
+    } finally {
+      cleanupTestEnvironment(testEnv);
+    }
+  });
+
+  it("cancels the tracked review when a foreground companion receives SIGINT", async () => {
+    const testEnv = createTestEnvironment();
+    let child = null;
+    const sessionEnv = {
+      ...testEnv.env,
+      [SESSION_ID_ENV]: "session-foreground-sigint",
+    };
+
+    try {
+      setupGitWorkspace(testEnv.workspaceDir);
+      seedWorkingTreeDiff(testEnv.workspaceDir);
+      child = spawn(
+        process.execPath,
+        [
+          COMPANION_SCRIPT,
+          "adversarial-review",
+          "--cwd",
+          testEnv.workspaceDir,
+          "--timeout-ms",
+          "5000",
+          "--json",
+          "delay=2500",
+        ],
+        {
+          cwd: PROJECT_ROOT,
+          env: sessionEnv,
+          stdio: ["ignore", "pipe", "pipe"],
+        }
+      );
+      let stdout = "";
+      let stderr = "";
+      child.stdout.setEncoding("utf8");
+      child.stderr.setEncoding("utf8");
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+
+      let jobId = null;
+      const deadline = Date.now() + 5000;
+      while (!jobId && Date.now() < deadline) {
+        const match = stderr.match(/Tracking foreground review as (review-[a-z0-9-]+)/i);
+        jobId = match?.[1] ?? null;
+        if (!jobId) await sleep(25);
+      }
+      assert.ok(jobId, `expected tracked job id in stderr: ${stderr}`);
+
+      await waitForJobState(
+        testEnv,
+        jobId,
+        sessionEnv,
+        (payload) => payload.state === "active" && payload.job.status === "running",
+        "running foreground review"
+      );
+      child.kill("SIGINT");
+      const exitCode = await new Promise((resolve, reject) => {
+        child.once("error", reject);
+        child.once("close", resolve);
+      });
+      assert.equal(exitCode, 130);
+      const payload = JSON.parse(stdout);
+      assert.equal(payload.jobId, jobId);
+      assert.equal(payload.status, "cancelled");
+      assert.equal(payload.signal, "SIGINT");
+
+      const storedJob = readStoredJobById(testEnv, jobId);
+      assert.equal(storedJob.status, "cancelled");
+      assert.match(storedJob.errorMessage, /SIGINT/);
+    } finally {
+      if (child?.exitCode == null && child?.signalCode == null) {
+        child.kill("SIGKILL");
+      }
+      cleanupTestEnvironment(testEnv);
+    }
+  });
+
+  it("cancels a queued review cleanly before any PID is recorded", () => {
+    const testEnv = createTestEnvironment();
+    const jobId = "review-queued-no-pid";
+
+    try {
+      writeSessionScopedJob(testEnv, jobId, {
+        id: jobId,
+        kind: "adversarial-review",
+        title: "Queued Review",
+        workspaceRoot: fs.realpathSync.native(testEnv.workspaceDir),
+        jobClass: "review",
+        status: "queued",
+        phase: "queued",
+        pid: null,
+        pidIdentity: null,
+        createdAt: new Date().toISOString(),
+      });
+
+      const payload = runCompanionJson(
+        ["cancel", "--cwd", testEnv.workspaceDir, "--json", jobId],
+        { env: testEnv.env }
+      );
+      assert.equal(payload.status, "cancelled");
+      assert.equal(payload.note, "No PID to cancel");
+
+      const storedJob = readStoredJobById(testEnv, jobId);
+      assert.equal(storedJob.status, "cancelled");
+      assert.match(storedJob.errorMessage, /Cancelled by user/);
     } finally {
       cleanupTestEnvironment(testEnv);
     }
