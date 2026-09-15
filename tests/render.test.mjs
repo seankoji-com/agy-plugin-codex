@@ -11,6 +11,7 @@ import {
   escapeMarkdownCell,
   renderSetupReport,
   renderReviewResult,
+  renderReviewWaitTimeout,
   renderTaskResult,
   renderStatusReport,
   renderJobStatusReport,
@@ -346,6 +347,25 @@ describe("renderTaskResult", () => {
   it("handles null input", () => {
     const output = renderTaskResult(null);
     assert.ok(output.includes("did not return a final message"));
+  });
+});
+
+describe("renderReviewWaitTimeout", () => {
+  it("shows the tracked job and both recovery commands", () => {
+    const output = renderReviewWaitTimeout({
+      jobId: "review-abc123",
+      status: "running",
+      timeoutMs: 120_000,
+      recovery: {
+        status: "$agy:status review-abc123",
+        result: "$agy:result review-abc123",
+      },
+    });
+    assert.match(output, /120s foreground wait ended/);
+    assert.match(output, /review-abc123/);
+    assert.match(output, /\$agy:status review-abc123/);
+    assert.match(output, /\$agy:result review-abc123/);
+    assert.match(output, /Do not start another review/);
   });
 });
 

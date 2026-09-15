@@ -1,6 +1,6 @@
 ---
 name: review
-description: 'Run a standard Antigravity review of local git changes in this repository. Args: --wait, --background, --base <ref>, --scope <auto|working-tree|branch>, --model <model>, --effort <low|medium|high>. Defaults to flash-medium with no forced effort. Use as the default path for ordinary code-review requests when the user did not explicitly ask for stronger adversarial scrutiny or for the delegated model to own the implementation work.'
+description: 'Run a standard Antigravity review of local git changes in this repository. Args: --wait, --background, --base <ref>, --scope <auto|working-tree|branch>, --model <model>, --effort <low|medium|high>, --timeout-ms <ms>. Defaults to flash-medium with no forced effort. Use as the default path for ordinary code-review requests when the user did not explicitly ask for stronger adversarial scrutiny or for the delegated model to own the implementation work.'
 ---
 
 # Antigravity Review
@@ -16,7 +16,7 @@ If the overall request is "you review it too, also ask Antigravity to review in 
 Resolve `<plugin-root>` as two directories above this `SKILL.md` file. Always run the companion from that active plugin root:
 `node "<plugin-root>/scripts/agy-companion.mjs" review ...`
 
-Supported arguments: `--wait`, `--background`, `--base <ref>`, `--scope auto|working-tree|branch`, `--model <model>`, `--effort <low|medium|high>` (defaults: model=flash-medium and no effort; `flash-low`, `flash-medium`, and `flash-high` each keep Antigravity's own effort default, and Antigravity owns which effort levels each model supports)
+Supported arguments: `--wait`, `--background`, `--base <ref>`, `--scope auto|working-tree|branch`, `--model <model>`, `--effort <low|medium|high>`, `--timeout-ms <ms>` (defaults: model=flash-medium, no effort, and a 120-second foreground wait; `flash-low`, `flash-medium`, and `flash-high` each keep Antigravity's own effort default, and Antigravity owns which effort levels each model supports)
 
 Forward `--model` unchanged to the companion. The companion trims surrounding whitespace, canonicalizes the friendly aliases `flash-low`, `flash-medium`, and `flash-high` to their catalog IDs (e.g. `gemini-3.8-flash-medium`), then forwards every other `--model` value unchanged to Antigravity. Antigravity owns alias resolution and supported effort levels; `agy models` is the authoritative catalog for the current account and provider.
 
@@ -59,9 +59,10 @@ Foreground flow:
 - Run:
   `node "<plugin-root>/scripts/agy-companion.mjs" review --view-state on-success <arguments with --wait/--background removed>`
 - Run that companion command with `sandbox_permissions: "require_escalated"` and the justification `Allow the Antigravity companion to contact the Antigravity API for this requested review.` Do not first try the companion command in the default network-disabled sandbox.
-- Foreground review belongs to the main Codex thread. Do not spawn a review subagent, do not invoke a generic review-runner role, and do not proxy this foreground path through any background worker abstraction.
+- Foreground review belongs to the main Codex thread. Do not spawn a review subagent, and do not invoke a generic review-runner role. The companion owns its internal tracked worker and foreground wait.
 - Do not fall back to raw `agy` invocations or any other direct Antigravity CLI syntax when the companion path is available. The foreground syntax contract here is the resolved companion command above, not a hand-rolled agy invocation.
 - If the resolved companion command fails, surface that failure. Do not silently retry foreground review through a different CLI shape, a generic review runner, or a custom shell wrapper.
+- If the companion exits 124, present its timeout output with the tracked job id. Do not retry or resubmit the diff; use the supplied `$agy:status <job-id>` and `$agy:result <job-id>` commands while that job continues.
 - Present the companion stdout faithfully.
 - Do not fix anything mentioned in the review output.
 

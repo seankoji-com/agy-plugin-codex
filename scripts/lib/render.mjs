@@ -306,6 +306,20 @@ export function renderTaskResult(parsedResult) {
   return `${message}\n`;
 }
 
+export function renderReviewWaitTimeout(payload) {
+  return [
+    "# Antigravity Review Still Running",
+    "",
+    `The ${payload.timeoutMs / 1000}s foreground wait ended, but job \`${payload.jobId}\` is still ${payload.status}. Its Antigravity turn was not cancelled.`,
+    "",
+    `- Status: \`${payload.recovery.status}\``,
+    `- Result: \`${payload.recovery.result}\``,
+    "",
+    "Do not start another review for the same diff. Recover this tracked job instead.",
+    "",
+  ].join("\n");
+}
+
 export function renderStatusReport(report) {
   const rows = collectStatusRows(report).slice(0, 15);
   if (rows.length === 0) return "No Antigravity jobs recorded yet.\n";
