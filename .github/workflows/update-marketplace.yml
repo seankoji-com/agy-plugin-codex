@@ -11,9 +11,14 @@ on:
         required: false
         default: main
 
+concurrency:
+  group: marketplace-update
+  cancel-in-progress: false
+
 jobs:
   update-marketplace:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     env:
@@ -120,7 +125,7 @@ jobs:
       - name: Merge marketplace pull request
         if: steps.create_pr.outputs.pr_number != ''
         env:
-          GH_TOKEN: ${{ secrets.SENDBIRD_CODEX_MARKETPLACE_PUSH_TOKEN }}
+          GH_TOKEN: ${{ secrets.SEANKOJI_CODEX_MARKETPLACE_PUSH_TOKEN }}
           PR_NUMBER: ${{ steps.create_pr.outputs.pr_number }}
         run: |
           # Auto-snapshot PRs are deterministic from the source tag and need to
