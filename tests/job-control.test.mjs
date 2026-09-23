@@ -2,6 +2,7 @@
  * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
+import "./support/isolate-codex-home.mjs";
 import { describe, it, before, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
