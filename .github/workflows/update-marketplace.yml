@@ -12,7 +12,7 @@ on:
         default: main
 
 concurrency:
-  group: marketplace-update
+  group: marketplace-update-${{ github.event.release.tag_name || inputs.ref || github.ref_name }}
   cancel-in-progress: false
 
 jobs:

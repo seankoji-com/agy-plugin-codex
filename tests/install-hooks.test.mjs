@@ -2,6 +2,7 @@
  * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
+import { testHomeEnv } from "./support/test-home-env.mjs";
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -23,9 +24,7 @@ function runInstallHooks(homeDir, scriptPath = SCRIPT_PATH, cwd = PROJECT_ROOT) 
   const result = spawnSync(process.execPath, [scriptPath], {
     cwd,
     env: {
-      ...process.env,
-      HOME: homeDir,
-      USERPROFILE: homeDir,
+      ...testHomeEnv(homeDir),
     },
     encoding: "utf8",
   });

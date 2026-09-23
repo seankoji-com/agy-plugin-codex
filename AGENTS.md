@@ -6,3 +6,4 @@
 - Run `npm run check` before merging.
 - For releases, update `CHANGELOG.md` and keep `package.json` and `.codex-plugin/plugin.json` versions synchronized.
 - Unit tests using plugin state must import `tests/support/isolate-codex-home.mjs` before state helpers so tests cannot write or migrate installed plugin data.
+- Installer and hook child fixtures use `testHomeEnv` from `tests/support/test-home-env.mjs`; it sets a temporary Codex home and clears inherited plugin data overrides.

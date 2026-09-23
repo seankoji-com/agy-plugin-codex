@@ -2,6 +2,7 @@
  * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
+import { testHomeEnv } from "./support/test-home-env.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -86,9 +87,7 @@ function runHook(testEnv, payload) {
   const result = spawnSync(process.execPath, [HOOK_SCRIPT], {
     cwd: PROJECT_ROOT,
     env: {
-      ...process.env,
-      HOME: testEnv.homeDir,
-      USERPROFILE: testEnv.homeDir,
+      ...testHomeEnv(testEnv.homeDir),
     },
     input: JSON.stringify(payload),
     encoding: "utf8",
@@ -437,9 +436,7 @@ test("skips unread-result announcements when nested-session hook suppression is 
     const result = spawnSync(process.execPath, [HOOK_SCRIPT], {
       cwd: PROJECT_ROOT,
       env: {
-        ...process.env,
-        HOME: testEnv.homeDir,
-        USERPROFILE: testEnv.homeDir,
+        ...testHomeEnv(testEnv.homeDir),
         AGY_COMPANION_SKIP_INTERACTIVE_HOOKS: "1",
       },
       input: JSON.stringify({

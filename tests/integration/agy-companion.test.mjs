@@ -10,6 +10,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { testHomeEnv } from "../support/test-home-env.mjs";
 
 import { SESSION_ID_ENV } from "../../scripts/lib/tracked-jobs.mjs";
 
@@ -156,10 +157,7 @@ function createTestEnvironment() {
     homeDir,
     workspaceDir,
     env: {
-      ...process.env,
-      HOME: homeDir,
-      USERPROFILE: homeDir,
-      CODEX_HOME: path.join(homeDir, ".codex"),
+      ...testHomeEnv(homeDir),
       PATH: `${binDir}${path.delimiter}${process.env.PATH || ""}`,
     },
   };
