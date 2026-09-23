@@ -494,7 +494,8 @@ rl.on("line", (line) => {
 
   return {
     env: {
-      AGY_PLUGIN_CODEX_EXECUTABLE: scriptPath,
+      AGY_PLUGIN_CODEX_EXECUTABLE: process.execPath,
+      AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([scriptPath, "app-server"]),
     },
     logPath,
   };
