@@ -62,6 +62,11 @@ describe("parseArgs", () => {
       assert.equal(result.options.output, "/tmp/out");
     });
 
+    it("preserves equals signs inside inline values", () => {
+      const result = parseArgs(["--output=query?a=b=c"], config);
+      assert.equal(result.options.output, "query?a=b=c");
+    });
+
     it("throws on missing value", () => {
       assert.throws(
         () => parseArgs(["--output"], config),
