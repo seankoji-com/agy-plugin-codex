@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { testHomeEnv } from "../support/test-home-env.mjs";
 
 const PROJECT_ROOT = path.resolve(
   fileURLToPath(new URL("../../", import.meta.url))
@@ -158,10 +159,7 @@ function createEnvironment() {
     outputFile,
     agyLogFile,
     env: {
-      ...process.env,
-      CODEX_HOME: codexHome,
-      HOME: homeDir,
-      USERPROFILE: homeDir,
+      ...testHomeEnv(homeDir),
       FAKE_AGY_LOG: agyLogFile,
       AGY_PLUGIN_CODEX_AGY_BIN: path.join(binDir, "agy"),
       PATH: `${binDir}${path.delimiter}${process.env.PATH || ""}`,

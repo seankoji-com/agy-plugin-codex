@@ -2,6 +2,7 @@
  * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
+import { testHomeEnv } from "./support/test-home-env.mjs";
 
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -118,9 +119,7 @@ function runInstaller(command, homeDir, sourceRoot, extraEnv = {}) {
     {
       cwd: sourceRoot,
       env: {
-        ...process.env,
-        HOME: homeDir,
-        USERPROFILE: homeDir,
+        ...testHomeEnv(homeDir),
         ...extraEnv,
       },
       encoding: "utf8",
@@ -138,9 +137,7 @@ function runLocalPluginInstaller(command, pluginRoot, homeDir, extraEnv = {}) {
     {
       cwd: pluginRoot,
       env: {
-        ...process.env,
-        HOME: homeDir,
-        USERPROFILE: homeDir,
+        ...testHomeEnv(homeDir),
         ...extraEnv,
       },
       encoding: "utf8",
@@ -158,9 +155,7 @@ function runLocalPluginInstallerExpectFailure(command, pluginRoot, homeDir, extr
     {
       cwd: pluginRoot,
       env: {
-        ...process.env,
-        HOME: homeDir,
-        USERPROFILE: homeDir,
+        ...testHomeEnv(homeDir),
         ...extraEnv,
       },
       encoding: "utf8",
@@ -499,7 +494,8 @@ rl.on("line", (line) => {
 
   return {
     env: {
-      AGY_PLUGIN_CODEX_EXECUTABLE: scriptPath,
+      AGY_PLUGIN_CODEX_EXECUTABLE: process.execPath,
+      AGY_PLUGIN_CODEX_APP_SERVER_ARGS_JSON: JSON.stringify([scriptPath, "app-server"]),
     },
     logPath,
   };
@@ -788,9 +784,7 @@ function runShellWrapper(scriptName, homeDir, sourceRoot, extraEnv = {}) {
   const result = spawnSync("bash", [path.join(PROJECT_ROOT, "scripts", scriptName)], {
     cwd: PROJECT_ROOT,
     env: {
-      ...process.env,
-      HOME: homeDir,
-      USERPROFILE: homeDir,
+      ...testHomeEnv(homeDir),
       AGY_PLUGIN_CODEX_TARBALL_URL: `file://${tarballPath}`,
       ...extraEnv,
     },
@@ -901,9 +895,7 @@ describe("installer-cli", () => {
       {
         cwd: sourceRoot,
         env: {
-          ...process.env,
-          HOME: homeDir,
-          USERPROFILE: homeDir,
+          ...testHomeEnv(homeDir),
           ...fakeCodex.env,
           AGY_PLUGIN_CODEX_MARKETPLACE_SOURCE: marketplaceRoot,
           AGY_PLUGIN_CODEX_MARKETPLACE_NAME: "sendbird",

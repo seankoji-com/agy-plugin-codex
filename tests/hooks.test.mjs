@@ -2,6 +2,7 @@
  * Copyright 2026 Sean Koji
  * SPDX-License-Identifier: Apache-2.0
  */
+import { testHomeEnv } from "./support/test-home-env.mjs";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -158,9 +159,7 @@ function createHookEnvironment(options = {}) {
     homeDir,
     workspaceDir,
     env: {
-      ...process.env,
-      HOME: homeDir,
-      USERPROFILE: homeDir,
+      ...testHomeEnv(homeDir),
       PATH: `${binDir}${path.delimiter}${process.env.PATH || ""}`,
     },
   };
