@@ -52,13 +52,14 @@ codex plugin add seankoji-com/agy-plugin-codex
 
 Then run `$agy:setup` once.
 
-The optional `npx` helper runs the same install path and enables the required Codex feature gates:
+The installer CLI runs the same install path and enables the required Codex feature gates. It is not published to npm, so run it from a clone (Node.js 18+, no dependencies to install):
 
 ```bash
-npx agy-plugin-codex install
+git clone https://github.com/seankoji-com/agy-plugin-codex.git
+node agy-plugin-codex/scripts/installer-cli.mjs install
 ```
 
-On Windows, prefer the marketplace path or the `npx` helper. The shell-script helper below is POSIX-only.
+On Windows, prefer the marketplace path or the installer CLI. The shell-script helper below is POSIX-only.
 
 > **Prerequisites:** Node.js 18+, Codex with hook support, and the `agy` CLI installed and authenticated.
 > If you don't have the Antigravity CLI yet, install it with the official installer and complete Google sign-in once:
@@ -286,10 +287,13 @@ $agy:setup
 
 Marketplace/plugin install places the plugin under Codex's plugin cache. `$agy:setup` verifies the Antigravity CLI, confirms `[features].hooks = true`, and trusts the current `hooks/hooks.json` hook hashes from the active plugin cache.
 
-### npx helper
+### Installer CLI from a clone
+
+The package is not published to npm, so `npx agy-plugin-codex` does not work. Run the same installer from a clone:
 
 ```bash
-npx agy-plugin-codex install
+git clone https://github.com/seankoji-com/agy-plugin-codex.git
+node agy-plugin-codex/scripts/installer-cli.mjs install
 ```
 
 After install, run:
@@ -312,16 +316,23 @@ $agy:setup
 
 ### Update
 
-Re-run the marketplace update/install flow or the `npx` helper — both are idempotent.
+Re-run the marketplace update/install flow, or pull the clone and run the installer CLI's `update`. Both are idempotent.
 
 ```bash
-npx agy-plugin-codex update
+git -C agy-plugin-codex pull
+node agy-plugin-codex/scripts/installer-cli.mjs update
 ```
 
 ### Uninstall
 
 ```bash
-npx agy-plugin-codex uninstall
+node agy-plugin-codex/scripts/installer-cli.mjs uninstall
+```
+
+Or, without a clone (POSIX-only):
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/seankoji-com/agy-plugin-codex/main/scripts/uninstall.sh" | bash
 ```
 
 ## Troubleshooting
