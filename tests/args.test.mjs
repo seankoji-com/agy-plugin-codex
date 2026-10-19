@@ -207,6 +207,34 @@ describe("splitRawArgumentString", () => {
       );
     });
 
+    it("preserves single-quoted Windows paths", () => {
+      assert.deepEqual(
+        splitRawArgumentString(String.raw`--cwd 'C:\work\my repo' --json`),
+        ["--cwd", String.raw`C:\work\my repo`, "--json"]
+      );
+    });
+
+    it("preserves single-quoted UNC paths and trailing separators", () => {
+      assert.deepEqual(
+        splitRawArgumentString("'\\\\server\\share\\' next"),
+        ["\\\\server\\share\\", "next"]
+      );
+    });
+
+    it("keeps a backslash literal before a space or double quote in single quotes", () => {
+      assert.deepEqual(
+        splitRawArgumentString(String.raw`'one\ two\"three'`),
+        [String.raw`one\ two\"three`]
+      );
+    });
+
+    it("retains double-quoted and unquoted backslash escaping", () => {
+      assert.deepEqual(
+        splitRawArgumentString(String.raw`"one\ two" three\ four`),
+        ["one two", "three four"]
+      );
+    });
+
     it("handles empty quotes", () => {
       assert.deepEqual(splitRawArgumentString('""'), []);
     });

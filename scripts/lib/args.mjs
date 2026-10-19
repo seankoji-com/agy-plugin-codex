@@ -125,7 +125,7 @@ export function splitRawArgumentString(raw) {
       continue;
     }
 
-    if (character === "\\") {
+    if (character === "\\" && quote !== "'") {
       escaping = true;
       continue;
     }

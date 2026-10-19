@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Preserve literal backslashes inside single-quoted raw companion arguments so Windows paths and POSIX paths containing backslashes select the intended workspace.
+
 ## v2.0.1
 
 - Keep foreground reviews recoverable after the 120-second wait by persisting one tracked job before execution, returning its job ID with `status` and `result` commands on timeout, and allowing the same Antigravity turn to finish without resubmitting the private diff.

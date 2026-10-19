@@ -23,6 +23,7 @@ Command selection:
 - The caller's background or foreground choice changes only subagent execution. It does not change the companion command you build.
 
 Routing controls:
+- Prefer separate argv values for paths. In the companion's one-raw-string form, single quotes preserve backslashes literally; outside single quotes, including inside double quotes, backslashes escape the next character. Preserve that raw string through the calling shell or tool as well.
 - Treat `--model`, `--effort`, `--resume`, `--resume-last`, `--fresh`, `--prompt-file`, `--view-state`, `--owner-session-id`, and `--job-id` as routing controls, not task text.
 - Leave `--model` and `--effort` unset unless the user explicitly asks for a specific model or effort. The companion command defaults model to `flash-medium` and forwards no `--effort` at all, so `flash-low`, `flash-medium`, and `flash-high` each keep whatever effort Antigravity defaults to for them. Antigravity owns which effort levels each model supports; this plugin owns no per-model effort table.
 - Forward an explicit `--model` value unchanged to the companion. The companion trims surrounding whitespace, canonicalizes the friendly aliases `flash-low`, `flash-medium`, and `flash-high` to their catalog IDs (e.g. `gemini-3.8-flash-medium`), then forwards every other `--model` value unchanged to Antigravity. Antigravity owns alias resolution; `agy models` is the authoritative catalog for the current account and provider.
