@@ -31,6 +31,7 @@ Routing controls:
 - `--view-state defer` means the parent is not waiting, so the companion must leave the result unread until the user explicitly checks it.
 - `--owner-session-id <session-id>` is an internal parent-session routing control. Preserve it when present so tracked jobs remain visible to the parent session's `$agy:status` / `$agy:result`.
 - Whenever the command includes a reserved `--job-id`, also include `--cwd <workspace-root>` using `workspaceRoot` from the same routing-context response. Reserved job ids are workspace-scoped.
+- Pass `--cwd` paths containing quotes or backslashes as separate argv values. The review runtime has no `--prompt-file` routing layer, so keep review focus text safe for the calling shell.
 - Never emit an empty routing placeholder such as `--owner-session-id  --job-id`.
 - Do not add `--quiet-progress` by default for built-in rescue forwarding. Let companion stderr progress remain available in the spawned agent thread.
 - If the free-text task begins with `/`, treat that slash command as literal Antigravity task text to forward unchanged. Do not execute it as a local Codex slash command or answer it inline.
@@ -44,7 +45,7 @@ Task defaults:
 - Default to `--write` unless the user explicitly wants read-only behavior or only review, diagnosis, or research without edits.
 - Preserve the user's task text apart from stripping routing flags.
 - If the resolved task text is multi-line, contains quote combinations that are difficult to preserve in the command, or includes XML-style blocks, prefer staging it in a temporary prompt file and pass it through `--prompt-file`. An apostrophe by itself is safe when the task text is passed as a double-quoted argument.
-- `--prompt-file` is a companion routing option for staging task text, not a Codex CLI runtime control. Use the companion's `task --prompt-file <path>` form where supported and pass the path as a separate argv value.
+- `--prompt-file` is a companion routing option for staging task text, not a Codex CLI runtime control. Use the companion's `task --prompt-file <path>` form and pass the path as a separate argv value.
 - Also stage task text in a prompt file when the calling shell could expand it inside double quotes, including `$(...)`, `${...}`, or a bare `$`, or when `!` could trigger interactive shell history expansion.
 - When staging a prompt file, keep the exact task text byte-for-byte and prefer a temporary path outside the repository checkout so the rescue flow does not dirty the repo.
 - Use a structured file-write path to create that prompt file when possible. Do not solve shell quoting by wrapping the same long task inside another brittle inline shell command.

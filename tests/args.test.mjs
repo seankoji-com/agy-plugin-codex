@@ -264,8 +264,20 @@ describe("splitRawArgumentString", () => {
       assert.deepEqual(splitRawArgumentString(`--cwd ${path} --json`), ["--cwd", path, "--json"]);
     });
 
+    it("preserves apostrophes in unquoted cwd paths after another option", () => {
+      const path = "/Users/o'brien/repo";
+      assert.deepEqual(splitRawArgumentString(`--json --cwd ${path}`), ["--json", "--cwd", path]);
+    });
+
     it("rejects an unterminated quote after another option", () => {
       assert.throws(() => splitRawArgumentString("--json --cwd 'unfinished"), /Unterminated quote/);
+    });
+
+    it("rejects an unterminated quote when a quoted value precedes the options", () => {
+      assert.throws(
+        () => splitRawArgumentString("'workspace with spaces' --json --cwd 'unfinished"),
+        /Unterminated quote/
+      );
     });
 
     it("rejects an unterminated raw cwd quote", () => {

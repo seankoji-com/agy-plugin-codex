@@ -113,13 +113,11 @@ function isRecognizedOptionToken(token, valueOptions, booleanOptions, aliasMap) 
 }
 
 export function splitRawArgumentString(raw) {
-  const isCwdInput = /(?:^|\s)--cwd(?:\s|=)/.test(raw);
-  if (hasUnterminatedQuote(raw, isCwdInput)) {
-    if (isCwdInput) throw new Error("Unterminated quote in raw argument string");
+  const isOptionInput = /(?:^|\s)--[^\s=]+(?:\s|=|$)/.test(raw);
+  const hasEscapedQuoteInCwd = /(?:^|\s)--cwd(?:=|\s+)'[^']*\\'/.test(raw);
+  if (hasEscapedQuoteInCwd || hasUnterminatedQuote(raw)) {
+    if (isOptionInput) throw new Error("Unterminated quote in raw argument string");
     return [raw];
-  }
-  if (isCwdInput && /--cwd\s+'[^']*\\'/.test(raw)) {
-    throw new Error("Unterminated quote in raw argument string");
   }
 
   const tokens = [];
@@ -180,12 +178,10 @@ export function splitRawArgumentString(raw) {
   return tokens;
 }
 
-function hasUnterminatedQuote(raw, strictSingleQuotes = false) {
+function hasUnterminatedQuote(raw) {
   let quote = null;
   let escaping = false;
   let token = "";
-  let sawCwd = false;
-  let cwdValueStarted = false;
   for (let index = 0; index < raw.length; index += 1) {
     const character = raw[index];
     if (escaping) {
@@ -198,21 +194,14 @@ function hasUnterminatedQuote(raw, strictSingleQuotes = false) {
     }
     if (quote) {
       if (character === quote) quote = null;
-    } else if (character === '"' || (character === "'" && (!token || token.endsWith("=") || (strictSingleQuotes && sawCwd && !cwdValueStarted)))) {
+    } else if (character === '"' || (character === "'" && (!token || token.endsWith("=")))) {
       quote = character;
     } else if (character === "'") {
       token += character;
     } else if (/\s/.test(character)) {
-      if (token === "--cwd") {
-        sawCwd = true;
-        cwdValueStarted = false;
-      } else if (sawCwd && token) {
-        sawCwd = false;
-      }
       token = "";
     } else {
       token += character;
-      if (sawCwd) cwdValueStarted = true;
     }
   }
   return quote !== null;
