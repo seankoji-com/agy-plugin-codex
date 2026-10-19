@@ -18,6 +18,13 @@ import {
 
 // node may not be on PATH in this test environment; find it once
 const NODE_BIN = process.execPath;
+const missingCommandSpawn = () => ({
+  status: null,
+  signal: null,
+  stdout: "",
+  stderr: "",
+  error: Object.assign(new Error("spawn missing command ENOENT"), { code: "ENOENT" }),
+});
 
 // ---------------------------------------------------------------------------
 // runCommand
@@ -43,7 +50,9 @@ describe("runCommand", () => {
   });
 
   it("reports ENOENT for missing command", () => {
-    const result = runCommand("definitely-not-a-real-command-xyz");
+    const result = runCommand("definitely-not-a-real-command-xyz", [], {
+      spawnSyncImpl: missingCommandSpawn,
+    });
     assert.ok(result.error);
     assert.equal(result.error.code, "ENOENT");
   });
@@ -119,7 +128,9 @@ describe("runCommandChecked", () => {
 
   it("throws the actual Error for ENOENT", () => {
     assert.throws(
-      () => runCommandChecked("no-such-binary-xyz"),
+      () => runCommandChecked("no-such-binary-xyz", [], {
+        spawnSyncImpl: missingCommandSpawn,
+      }),
       (err) => err.code === "ENOENT"
     );
   });
@@ -137,7 +148,9 @@ describe("binaryAvailable", () => {
   });
 
   it("returns available:false for missing binary", () => {
-    const result = binaryAvailable("not-real-binary-xyz");
+    const result = binaryAvailable("not-real-binary-xyz", ["--version"], {
+      spawnSyncImpl: missingCommandSpawn,
+    });
     assert.equal(result.available, false);
     assert.equal(result.detail, "not found");
   });

@@ -9,7 +9,7 @@ Primary helper:
 - `node "<plugin-root>/scripts/agy-companion.mjs" adversarial-review ...`
 
 Execution boundary:
-- Prefer separate argv values for paths. In the companion's one-raw-string form, single quotes preserve backslashes literally; outside single quotes, including inside double quotes, backslashes escape the next character. Preserve that raw string through the calling shell or tool as well.
+- Prefer separate argv values for paths. In the companion's one-raw-string form, single quotes preserve backslashes literally; outside single quotes, including inside double quotes, backslashes escape the next character. A backslash before a single quote inside single quotes is literal, so it does not escape that quote: `'it\'s'` yields `it\` and leaves `s` unquoted. Pass values containing that sequence as separate argv values. Preserve the raw string through the calling shell or tool as well.
 - Foreground review stays on the main Codex thread. Do not satisfy it through a review subagent or generic review-runner role. The companion itself persists one tracked worker before waiting so a timeout remains recoverable.
 - Background review uses exactly one built-in forwarding child through `spawn_agent`.
 - Never satisfy either mode with raw `agy` invocations, hand-rolled `bash -lc ...agy...`, or detached companion shell backgrounding.

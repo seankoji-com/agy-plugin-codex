@@ -20,6 +20,7 @@ it("routes single-quoted raw cwd to the same repository as ordinary argv", () =>
     // Windows paths already contain separators; POSIX needs a literal backslash.
     const name = process.platform === "win32" ? "workspace with spaces" : "workspace\\branch with spaces";
     const workspace = path.join(root, name);
+    assert.ok(workspace.includes("\\"), "raw cwd fixture must contain a backslash");
     const home = path.join(root, "home");
     fs.mkdirSync(workspace);
     fs.mkdirSync(home);
@@ -39,7 +40,7 @@ it("routes single-quoted raw cwd to the same repository as ordinary argv", () =>
 
     const ordinary = routing(["--cwd", workspace, "--json"]);
     const raw = routing([`--cwd '${workspace}' --json`]);
-    assert.equal(fs.realpathSync(ordinary), fs.realpathSync(workspace));
+    assert.equal(ordinary, fs.realpathSync.native(workspace));
     assert.equal(raw, ordinary);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
