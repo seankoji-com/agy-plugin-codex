@@ -2117,15 +2117,16 @@ async function cancelTrackedJob(workspaceRoot, job, errorMessage) {
 
   const completedAt = nowIso();
   const status = cancelResult.cancelled ? "cancelled" : "cancel_failed";
+  let finalTransition;
   if (status === "cancelled") {
-    transitionJob(workspaceRoot, job.id, ["cancelling"], "cancelled", {
+    finalTransition = transitionJob(workspaceRoot, job.id, ["cancelling"], "cancelled", {
       completedAt,
       errorMessage,
       pid: null,
       pidIdentity: null,
     });
   } else {
-    transitionJob(workspaceRoot, job.id, ["cancelling"], "cancel_failed", {
+    finalTransition = transitionJob(workspaceRoot, job.id, ["cancelling"], "cancel_failed", {
       completedAt,
       errorMessage: `Cancel failed: ${cancelResult.note ?? "process group still alive"}`,
       note: cancelResult.note ?? null,
@@ -2133,15 +2134,19 @@ async function cancelTrackedJob(workspaceRoot, job, errorMessage) {
     });
   }
 
-  appendLogLine(jobLogFile, `Cancel result: ${status}`);
+  const finalJob = finalTransition.job;
+  const note = finalTransition.transitioned
+    ? cancelResult.note
+    : `Job state changed to ${finalJob.status} while cancellation was in progress.`;
+  appendLogLine(jobLogFile, `Cancel result: ${finalJob.status}`);
   cleanupOldJobs(workspaceRoot);
   return {
-    job: { ...job, status, phase: status },
+    job: finalJob,
     payload: {
       jobId: job.id,
-      status,
-      title: job.title,
-      note: cancelResult.note,
+      status: finalJob.status,
+      title: finalJob.title,
+      note,
     },
   };
 }

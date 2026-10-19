@@ -633,6 +633,21 @@ describe("renderStoredJobResult", () => {
 // ---------------------------------------------------------------------------
 
 describe("renderCancelReport", () => {
+  for (const status of ["completed", "failed", "running"]) {
+    it(`reports the actual ${status} state without claiming cancellation`, () => {
+      const output = renderCancelReport({ id: "j1", status });
+      assert.ok(output.includes(`Job j1 is ${status}.`));
+      assert.ok(!output.includes("Cancelled j1"));
+    });
+  }
+
+  it("does not claim success when cancellation failed", () => {
+    const output = renderCancelReport({ id: "j1", status: "cancel_failed", pgid: 12345 });
+    assert.ok(output.includes("Could not cancel j1."));
+    assert.ok(!output.includes("Cancelled j1"));
+    assert.ok(output.includes("Manual cleanup"));
+  });
+
   it("renders basic cancel confirmation", () => {
     const output = renderCancelReport({ id: "j1" });
     assert.ok(output.includes("Cancelled j1"));

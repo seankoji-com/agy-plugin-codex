@@ -401,7 +401,12 @@ export function renderStoredJobResult(job, storedJob) {
 }
 
 export function renderCancelReport(job) {
-  const lines = ["# Antigravity Cancel", "", `Cancelled ${job.id}.`, ""];
+  const outcome = job.status === "cancel_failed"
+    ? `Could not cancel ${job.id}.`
+    : job.status && job.status !== "cancelled"
+      ? `Job ${job.id} is ${job.status}.`
+      : `Cancelled ${job.id}.`;
+  const lines = ["# Antigravity Cancel", "", outcome, ""];
   if (job.title) lines.push(`- Title: ${job.title}`);
   if (job.summary) lines.push(`- Summary: ${job.summary}`);
   if (job.status === "cancel_failed") lines.push(`- Warning: Process group may still be alive. Manual cleanup: kill -9 -${job.pgid ?? job.pid}`);
