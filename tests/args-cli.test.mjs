@@ -17,8 +17,8 @@ const companion = fileURLToPath(new URL("../scripts/agy-companion.mjs", import.m
 it("routes single-quoted raw cwd to the same repository as ordinary argv", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "agy-raw-cwd-"));
   try {
-    // Windows paths already contain separators; POSIX needs a literal backslash.
-    const name = process.platform === "win32" ? "workspace with spaces" : "workspace\\branch with spaces";
+    // Include a separator inside the quoted path on every platform.
+    const name = "workspace\\branch with spaces";
     const workspace = path.join(root, name);
     assert.ok(workspace.includes("\\"), "raw cwd fixture must contain a backslash");
     const home = path.join(root, "home");
