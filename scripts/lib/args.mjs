@@ -113,12 +113,13 @@ function isRecognizedOptionToken(token, valueOptions, booleanOptions, aliasMap) 
 }
 
 export function splitRawArgumentString(raw) {
-  const isCwdInput = /^\s*--cwd(?:\s|=)/.test(raw);
+  const isCwdInput = /(?:^|\s)--cwd(?:\s|=)/.test(raw);
   if (hasUnterminatedQuote(raw, isCwdInput)) {
-    if (isCwdInput) {
-      throw new Error("Unterminated quote in raw argument string");
-    }
+    if (isCwdInput) throw new Error("Unterminated quote in raw argument string");
     return [raw];
+  }
+  if (isCwdInput && /--cwd\s+'[^']*\\'/.test(raw)) {
+    throw new Error("Unterminated quote in raw argument string");
   }
 
   const tokens = [];
@@ -182,8 +183,11 @@ export function splitRawArgumentString(raw) {
 function hasUnterminatedQuote(raw, strictSingleQuotes = false) {
   let quote = null;
   let escaping = false;
-  let current = "";
-  for (const character of raw) {
+  let token = "";
+  let sawCwd = false;
+  let cwdValueStarted = false;
+  for (let index = 0; index < raw.length; index += 1) {
+    const character = raw[index];
     if (escaping) {
       escaping = false;
       continue;
@@ -194,14 +198,21 @@ function hasUnterminatedQuote(raw, strictSingleQuotes = false) {
     }
     if (quote) {
       if (character === quote) quote = null;
-    } else if (character === '"' || (character === "'" && (strictSingleQuotes || !current || current.endsWith("=")))) {
+    } else if (character === '"' || (character === "'" && (!token || token.endsWith("=") || (strictSingleQuotes && sawCwd && !cwdValueStarted)))) {
       quote = character;
     } else if (character === "'") {
-      current += character;
+      token += character;
     } else if (/\s/.test(character)) {
-      current = "";
+      if (token === "--cwd") {
+        sawCwd = true;
+        cwdValueStarted = false;
+      } else if (sawCwd && token) {
+        sawCwd = false;
+      }
+      token = "";
     } else {
-      current += character;
+      token += character;
+      if (sawCwd) cwdValueStarted = true;
     }
   }
   return quote !== null;

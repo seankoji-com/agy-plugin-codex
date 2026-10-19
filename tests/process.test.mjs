@@ -44,6 +44,13 @@ describe("runCommand", () => {
     assert.equal(result.stderr, "oops");
   });
 
+  it("executes the requested process and observes its exit status", () => {
+    const result = runCommand(NODE_BIN, ["-e", "process.stdout.write('ran'); process.exit(7)"]);
+    assert.equal(result.stdout, "ran");
+    assert.equal(result.status, 7);
+    assert.equal(result.error, null);
+  });
+
   it("reports non-zero exit code", () => {
     const result = runCommand(NODE_BIN, ["-e", "process.exit(42)"]);
     assert.equal(result.status, 42);

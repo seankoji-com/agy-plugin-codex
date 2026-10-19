@@ -255,6 +255,19 @@ describe("splitRawArgumentString", () => {
       assert.equal(splitRawArgumentString(task).join(" "), task);
     });
 
+    it("tokenizes a contraction followed by an option exactly", () => {
+      assert.deepEqual(splitRawArgumentString("don't --json"), ["don't", "--json"]);
+    });
+
+    it("preserves apostrophes in valid unquoted paths", () => {
+      const path = "/Users/o'brien/repo";
+      assert.deepEqual(splitRawArgumentString(`--cwd ${path} --json`), ["--cwd", path, "--json"]);
+    });
+
+    it("rejects an unterminated quote after another option", () => {
+      assert.throws(() => splitRawArgumentString("--json --cwd 'unfinished"), /Unterminated quote/);
+    });
+
     it("rejects an unterminated raw cwd quote", () => {
       assert.throws(
         () => splitRawArgumentString(String.raw`--cwd 'it\'s' --json`),
