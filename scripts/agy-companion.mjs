@@ -1392,7 +1392,7 @@ async function runForegroundReviewCommand(cwd, job, request, options = {}) {
       await waitPromise.catch(() => {});
       outputCommandResult(
         { ...cancellation.payload, signal: outcome.signal },
-        renderCancelReport(cancellation.job, cancellation.cancelResult),
+        renderCancelReport(cancellation.job, cancellation.cancelResult, cancellation.attempted),
         options.json
       );
       process.exitCode = outcome.signal === "SIGINT" ? 130 : 143;
@@ -2088,9 +2088,18 @@ async function cancelTrackedJob(workspaceRoot, job, errorMessage) {
   const transition = beginJobCancellation(workspaceRoot, job.id);
   if (!transition.transitioned) {
     const status = transition.job?.status ?? job.status;
+    // The caller lost the `cancelling` CAS: another actor owns the job now. If a
+    // process is still recorded and the winner has not already reported a terminal
+    // cancel outcome, that process may still be running, so the report must warn.
+    const attempted = transition.job?.pgid ?? transition.job?.pid ?? job.pgid ?? job.pid ?? null;
+    const mayStillRun =
+      Boolean(attempted) && status !== "cancelled" && status !== "cancel_failed";
     return {
       job: { ...job, status, phase: status },
-      cancelResult: null,
+      cancelResult: mayStillRun
+        ? { cancelled: false, note: "Cancellation transition lost while the job was still active." }
+        : null,
+      attempted,
       payload: { jobId: job.id, status, title: job.title },
     };
   }
@@ -2144,6 +2153,7 @@ async function cancelTrackedJob(workspaceRoot, job, errorMessage) {
   return {
     job: finalJob,
     cancelResult,
+    attempted: pid && Number.isFinite(pid) ? pid : null,
     payload: {
       jobId: job.id,
       status: finalJob.status,
@@ -2169,7 +2179,7 @@ async function handleCancel(argv) {
   );
   outputCommandResult(
     cancellation.payload,
-    renderCancelReport(cancellation.job, cancellation.cancelResult),
+    renderCancelReport(cancellation.job, cancellation.cancelResult, cancellation.attempted),
     options.json
   );
 }
