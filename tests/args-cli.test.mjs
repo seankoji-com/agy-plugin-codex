@@ -22,7 +22,7 @@ it("routes single-quoted raw cwd to the same repository as ordinary argv", () =>
     const workspace = path.join(root, name);
     assert.ok(workspace.includes("\\"), "raw cwd fixture must contain a backslash");
     const home = path.join(root, "home");
-    fs.mkdirSync(workspace);
+    fs.mkdirSync(workspace, { recursive: true });
     fs.mkdirSync(home);
     const env = { ...testHomeEnv(home), CODEX_THREAD_ID: "raw-cwd-fixture" };
     const init = spawnSync("git", ["init", "--quiet", workspace], { env, encoding: "utf8" });

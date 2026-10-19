@@ -113,6 +113,14 @@ function isRecognizedOptionToken(token, valueOptions, booleanOptions, aliasMap) 
 }
 
 export function splitRawArgumentString(raw) {
+  const isCwdInput = /^\s*--cwd(?:\s|=)/.test(raw);
+  if (hasUnterminatedQuote(raw, isCwdInput)) {
+    if (isCwdInput) {
+      throw new Error("Unterminated quote in raw argument string");
+    }
+    return [raw];
+  }
+
   const tokens = [];
   let current = "";
   let quote = null;
@@ -139,8 +147,13 @@ export function splitRawArgumentString(raw) {
       continue;
     }
 
-    if (character === "'" || character === "\"") {
+    if (character === "\"" || (character === "'" && (!current || current.endsWith("=")))) {
       quote = character;
+      continue;
+    }
+
+    if (character === "'") {
+      current += character;
       continue;
     }
 
@@ -159,13 +172,37 @@ export function splitRawArgumentString(raw) {
     current += "\\";
   }
 
-  if (quote) {
-    throw new Error("Unterminated quote in raw argument string");
-  }
-
   if (current) {
     tokens.push(current);
   }
 
   return tokens;
+}
+
+function hasUnterminatedQuote(raw, strictSingleQuotes = false) {
+  let quote = null;
+  let escaping = false;
+  let current = "";
+  for (const character of raw) {
+    if (escaping) {
+      escaping = false;
+      continue;
+    }
+    if (character === "\\" && quote !== "'") {
+      escaping = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = null;
+    } else if (character === '"' || (character === "'" && (strictSingleQuotes || !current || current.endsWith("=")))) {
+      quote = character;
+    } else if (character === "'") {
+      current += character;
+    } else if (/\s/.test(character)) {
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+  return quote !== null;
 }

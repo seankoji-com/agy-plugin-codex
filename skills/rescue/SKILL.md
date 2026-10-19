@@ -114,7 +114,8 @@ Subagent launch:
 - Treat any of the following as prompt-file triggers unless the user already supplied `--prompt-file`:
   - multi-line task text
   - quote combinations that cannot be preserved safely in the command, backticks, or XML-style blocks such as `<task>` / `<output_contract>`
-- text the calling shell would expand even inside double quotes, such as `$(...)`, `${...}`, or a bare `$`
+  - text the calling shell would expand even inside double quotes, such as `$(...)`, `${...}`, or a bare `$`
+  - `!` when interactive shell history expansion may be enabled
   - long concrete requests where inline shell quoting would be brittle
 - When using a prompt file, preserve the exact resolved task text byte-for-byte in that file and point the companion command at that file with an absolute `--prompt-file` path.
 - Prefer a temporary path outside the repository checkout, for example under the OS temp directory such as `/tmp` on POSIX systems, so rescue prompt staging does not dirty the repo.

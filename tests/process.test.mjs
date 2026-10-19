@@ -59,12 +59,24 @@ describe("runCommand", () => {
 
   it("reports ENOENT for a missing command from a real spawn", (t) => {
     const result = runCommand("definitely-not-a-real-command-xyz");
-    if (result.error?.code === "EACCES") {
+    if (result.error?.code && result.error.code !== "ENOENT") {
       t.skip("the execution environment blocks missing-command probes");
       return;
     }
     assert.ok(result.error);
     assert.equal(result.error.code, "ENOENT");
+  });
+
+  it("preserves a non-ENOENT spawn error for deterministic coverage", () => {
+    const blockedSpawn = () => ({
+      status: null,
+      signal: null,
+      stdout: "",
+      stderr: "",
+      error: Object.assign(new Error("spawn blocked command EACCES"), { code: "EACCES" }),
+    });
+    const result = runCommand("blocked-command", [], { spawnSyncImpl: blockedSpawn });
+    assert.equal(result.error?.code, "EACCES");
   });
 
   it("preserves command and args in result", () => {

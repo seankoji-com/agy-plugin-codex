@@ -250,7 +250,12 @@ describe("splitRawArgumentString", () => {
       );
     });
 
-    it("rejects unterminated quotes instead of consuming trailing flags", () => {
+    it("preserves unmatched apostrophes in arbitrary task text", () => {
+      const task = "Please don't rewrite the user's prompt";
+      assert.equal(splitRawArgumentString(task).join(" "), task);
+    });
+
+    it("rejects an unterminated raw cwd quote", () => {
       assert.throws(
         () => splitRawArgumentString(String.raw`--cwd 'it\'s' --json`),
         /Unterminated quote/
