@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Show queued reviews and tasks in the status overview so pending work remains discoverable. Remove the job-control test suite's owned temporary directory after it finishes.
+
 ## v2.0.1
 
 - Keep foreground reviews recoverable after the 120-second wait by persisting one tracked job before execution, returning its job ID with `status` and `result` commands on timeout, and allowing the same Antigravity turn to finish without resubmitting the private diff.
