@@ -71,6 +71,7 @@ import { loadPromptTemplate, interpolateTemplate } from "./lib/prompts.mjs";
 import { parseStructuredOutput } from "./lib/structured-output.mjs";
 import {
   ACTIVE_JOB_STATUSES,
+  beginJobCancellation,
   ensureStateDir,
   generateJobId,
   getConfig,
@@ -1359,9 +1360,11 @@ async function runForegroundReviewCommand(cwd, job, request, options = {}) {
   process.stderr.write(
     `[agy] Tracking foreground review as ${job.id}; waiting up to ${options.timeoutMs / 1000}s.\n`
   );
+  const waitController = new AbortController();
   const waitPromise = waitForSingleJobSnapshot(cwd, job.id, {
     timeoutMs: options.timeoutMs,
     pollIntervalMs: 100,
+    signal: waitController.signal,
   });
   let resolveSignal;
   const signalPromise = new Promise((resolve) => {
@@ -1379,6 +1382,7 @@ async function runForegroundReviewCommand(cwd, job, request, options = {}) {
       signalPromise.then((signal) => ({ signal })),
     ]);
     if ("signal" in outcome) {
+      waitController.abort();
       const storedJob = readStoredJob(job.workspaceRoot, job.id) ?? job;
       const cancellation = await cancelTrackedJob(
         job.workspaceRoot,
@@ -1396,6 +1400,7 @@ async function runForegroundReviewCommand(cwd, job, request, options = {}) {
     }
     snapshot = outcome.snapshot;
   } finally {
+    waitController.abort();
     process.removeListener("SIGINT", onSigint);
     process.removeListener("SIGTERM", onSigterm);
   }
@@ -1501,10 +1506,11 @@ async function waitForSingleJobSnapshot(cwd, reference, options = {}) {
   const deadline = Date.now() + timeoutMs;
   let snapshot = buildSingleJobSnapshot(cwd, reference);
 
-  while (isActiveJobStatus(snapshot.job.status) && Date.now() < deadline) {
+  while (!options.signal?.aborted && isActiveJobStatus(snapshot.job.status) && Date.now() < deadline) {
     await sleep(
       Math.min(pollIntervalMs, Math.max(0, deadline - Date.now()))
     );
+    if (options.signal?.aborted) break;
     snapshot = buildSingleJobSnapshot(cwd, reference);
   }
 
@@ -2079,13 +2085,7 @@ function handleReserveJob(argv, prefix) {
 }
 
 async function cancelTrackedJob(workspaceRoot, job, errorMessage) {
-  const existing = readStoredJob(workspaceRoot, job.id) ?? {};
-  const transition = transitionJob(
-    workspaceRoot,
-    job.id,
-    ["running", "queued"],
-    "cancelling"
-  );
+  const transition = beginJobCancellation(workspaceRoot, job.id);
   if (!transition.transitioned) {
     const status = transition.job?.status ?? job.status;
     return {
@@ -2094,8 +2094,8 @@ async function cancelTrackedJob(workspaceRoot, job, errorMessage) {
     };
   }
 
-  const pid = existing.pid ?? job.pid;
-  const pidIdentity = existing.pidIdentity ?? null;
+  const pid = transition.job.pid;
+  const pidIdentity = transition.job.pidIdentity ?? null;
   /** @type {{ cancelled: boolean, note?: string }} */
   let cancelResult = { cancelled: true, note: "No PID to cancel" };
   const jobLogFile = resolveJobLogFile(workspaceRoot, job.id);
