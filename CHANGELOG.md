@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Preserve literal backslashes inside single-quoted raw companion arguments so Windows paths and POSIX paths containing backslashes select the intended workspace.
+- Resolve the workspace root to its canonical Windows spelling so an 8.3 short-name `--cwd` (for example `RUNNER~1`) and its long-name form route to the same workspace and share one plugin state directory.
 
 ## v2.0.1
 
