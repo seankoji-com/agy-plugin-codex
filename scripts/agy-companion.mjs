@@ -1392,7 +1392,7 @@ async function runForegroundReviewCommand(cwd, job, request, options = {}) {
       await waitPromise.catch(() => {});
       outputCommandResult(
         { ...cancellation.payload, signal: outcome.signal },
-        renderCancelReport(cancellation.job),
+        renderCancelReport(cancellation.job, cancellation.cancelResult),
         options.json
       );
       process.exitCode = outcome.signal === "SIGINT" ? 130 : 143;
@@ -2090,6 +2090,7 @@ async function cancelTrackedJob(workspaceRoot, job, errorMessage) {
     const status = transition.job?.status ?? job.status;
     return {
       job: { ...job, status, phase: status },
+      cancelResult: null,
       payload: { jobId: job.id, status, title: job.title },
     };
   }
@@ -2142,6 +2143,7 @@ async function cancelTrackedJob(workspaceRoot, job, errorMessage) {
   cleanupOldJobs(workspaceRoot);
   return {
     job: finalJob,
+    cancelResult,
     payload: {
       jobId: job.id,
       status: finalJob.status,
@@ -2167,7 +2169,7 @@ async function handleCancel(argv) {
   );
   outputCommandResult(
     cancellation.payload,
-    renderCancelReport(cancellation.job),
+    renderCancelReport(cancellation.job, cancellation.cancelResult),
     options.json
   );
 }

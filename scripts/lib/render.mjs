@@ -400,7 +400,7 @@ export function renderStoredJobResult(job, storedJob) {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
-export function renderCancelReport(job) {
+export function renderCancelReport(job, cancelResult = null) {
   const outcome = job.status === "cancel_failed"
     ? `Could not cancel ${job.id}.`
     : job.status && job.status !== "cancelled"
@@ -409,7 +409,15 @@ export function renderCancelReport(job) {
   const lines = ["# Antigravity Cancel", "", outcome, ""];
   if (job.title) lines.push(`- Title: ${job.title}`);
   if (job.summary) lines.push(`- Summary: ${job.summary}`);
-  if (job.status === "cancel_failed") lines.push(`- Warning: Process group may still be alive. Manual cleanup: kill -9 -${job.pgid ?? job.pid}`);
+  // A lost `cancel_failed` transition leaves the job in another status, so the
+  // recorded cancel outcome must also be considered before dropping the warning
+  // about a process group that may still be alive.
+  const cancelIncomplete =
+    job.status === "cancel_failed" || cancelResult?.cancelled === false;
+  const cleanupTarget = job.pgid ?? job.pid;
+  if (cancelIncomplete && cleanupTarget) {
+    lines.push(`- Warning: Process group may still be alive. Manual cleanup: kill -9 -${cleanupTarget}`);
+  }
   lines.push("- Check `$agy:status` for the updated queue.");
   return `${lines.join("\n").trimEnd()}\n`;
 }

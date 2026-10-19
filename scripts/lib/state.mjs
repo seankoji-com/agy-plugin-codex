@@ -695,9 +695,10 @@ export function transitionJob(cwd, jobId, expectedStatuses, next, extra = {}) {
 
 export function beginJobCancellation(cwd, jobId, options = {}) {
   return transitionJobWithPatch(cwd, jobId, ["running", "queued"], "cancelling", (job) => {
-    // A no-PID cancellation is synchronous. Capture ownership only when the
-    // cancelling actor may yield while terminating a recorded process.
-    if (!Number.isFinite(job.pid) || !job.pid || !job.pidIdentity) return {};
+    // A no-PID cancellation is synchronous. Capture ownership whenever a
+    // process is recorded, even if the target identity was unavailable at
+    // spawn time, so the reaper cannot fail a job another actor is cancelling.
+    if (!Number.isFinite(job.pid) || !job.pid) return {};
     let identity;
     try {
       identity = (options.identityImpl ?? getProcessIdentity)(process.pid);
