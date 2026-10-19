@@ -245,6 +245,13 @@ describe("splitRawArgumentString", () => {
         ["prequotedpost"]
       );
     });
+
+    it("rejects unterminated quotes instead of consuming trailing flags", () => {
+      assert.throws(
+        () => splitRawArgumentString("--cwd 'workspace --json"),
+        /Unterminated quote/
+      );
+    });
   });
 
   describe("escape sequences", () => {

@@ -159,6 +159,10 @@ export function splitRawArgumentString(raw) {
     current += "\\";
   }
 
+  if (quote) {
+    throw new Error("Unterminated quote in raw argument string");
+  }
+
   if (current) {
     tokens.push(current);
   }

@@ -7,12 +7,11 @@ import fs from "node:fs";
 import { ensureGitRepository } from "./git.mjs";
 
 /**
- * Resolve the workspace root to the filesystem's canonical spelling before
- * returning it. This unifies Windows short and long names and slash styles,
- * and gives every platform the same identity for a workspace reached through
- * a symlink.
+ * Resolve an existing workspace path to its filesystem spelling. The state
+ * directory hash already applies realpath independently; this also keeps the
+ * workspaceRoot returned to callers and persisted in jobs consistent.
  */
-function canonicalizeWorkspacePath(candidate) {
+export function canonicalizeWorkspacePath(candidate) {
   try {
     return fs.realpathSync.native(candidate);
   } catch {

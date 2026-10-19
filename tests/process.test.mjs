@@ -57,6 +57,16 @@ describe("runCommand", () => {
     assert.equal(result.error.code, "ENOENT");
   });
 
+  it("reports ENOENT for a missing command from a real spawn", (t) => {
+    const result = runCommand("definitely-not-a-real-command-xyz");
+    if (result.error?.code === "EACCES") {
+      t.skip("the execution environment blocks missing-command probes");
+      return;
+    }
+    assert.ok(result.error);
+    assert.equal(result.error.code, "ENOENT");
+  });
+
   it("preserves command and args in result", () => {
     const result = runCommand("echo", ["a", "b"]);
     assert.equal(result.command, "echo");
