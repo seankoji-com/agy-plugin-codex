@@ -248,7 +248,7 @@ describe("splitRawArgumentString", () => {
 
     it("rejects unterminated quotes instead of consuming trailing flags", () => {
       assert.throws(
-        () => splitRawArgumentString("--cwd 'workspace --json"),
+        () => splitRawArgumentString(String.raw`--cwd 'it\'s' --json`),
         /Unterminated quote/
       );
     });
