@@ -200,6 +200,10 @@ describe("splitRawArgumentString", () => {
       );
     });
 
+    it("preserves an apostrophe inside a double-quoted task argument", () => {
+      assert.deepEqual(splitRawArgumentString('"it\'s safe"'), ["it's safe"]);
+    });
+
     it("handles single-quoted strings", () => {
       assert.deepEqual(
         splitRawArgumentString("hello 'world wide' test"),

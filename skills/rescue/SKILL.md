@@ -110,10 +110,10 @@ Subagent launch:
 - Do not use `<parent_context>` for already-clear fresh tasks unless it adds real value.
 - Keep `<parent_context>` deterministic and short. Do not turn it into a free-form summary of the whole parent thread.
 - For the built-in rescue path, parent-side shaping must happen before the command is handed to the child. The child must not do an additional interpretation pass.
-- If the resolved rescue task text is shell-hostile or likely to break a single inline shell string, materialize it into a temporary prompt file first and use `--prompt-file` instead of embedding the task directly in the command.
+- If the resolved rescue task text is likely to break a single inline shell string, materialize it into a temporary prompt file first and use `--prompt-file` instead of embedding the task directly in the command. An apostrophe by itself is safe when the task text is passed as a double-quoted argument.
 - Treat any of the following as prompt-file triggers unless the user already supplied `--prompt-file`:
   - multi-line task text
-  - single quotes, backticks, or XML-style blocks such as `<task>` / `<output_contract>`
+  - quote combinations that cannot be preserved safely in the command, backticks, or XML-style blocks such as `<task>` / `<output_contract>`
   - long concrete requests where inline shell quoting would be brittle
 - When using a prompt file, preserve the exact resolved task text byte-for-byte in that file and point the companion command at that file with an absolute `--prompt-file` path.
 - Prefer a temporary path outside the repository checkout, for example under the OS temp directory such as `/tmp` on POSIX systems, so rescue prompt staging does not dirty the repo.

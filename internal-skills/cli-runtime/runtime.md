@@ -43,7 +43,7 @@ Routing controls:
 Task defaults:
 - Default to `--write` unless the user explicitly wants read-only behavior or only review, diagnosis, or research without edits.
 - Preserve the user's task text apart from stripping routing flags.
-- If the resolved task text is multi-line, contains shell-hostile quoting, or includes XML-style blocks, prefer staging it in a temporary prompt file and pass it through `--prompt-file` instead of inlining it in one shell string.
+- If the resolved task text is multi-line, contains quote combinations that are difficult to preserve in the command, or includes XML-style blocks, prefer staging it in a temporary prompt file and pass it through `--prompt-file`. An apostrophe by itself is safe when the task text is passed as a double-quoted argument.
 - When staging a prompt file, keep the exact task text byte-for-byte and prefer a temporary path outside the repository checkout so the rescue flow does not dirty the repo.
 - Use a structured file-write path to create that prompt file when possible. Do not solve shell quoting by wrapping the same long task inside another brittle inline shell command.
 - If the tool output includes stderr progress chatter and a final stdout-style result, ignore the progress chatter and preserve only the final stdout-equivalent result text.

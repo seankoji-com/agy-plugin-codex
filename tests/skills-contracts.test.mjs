@@ -369,7 +369,8 @@ test("rescue skill documents the experimental built-in-agent forwarding path", (
   assert.match(rescue, /Do not compress it into a shorter delta/i);
   assert.match(rescue, /materialize it into a temporary prompt file first and use `--prompt-file` instead of embedding the task directly/i);
   assert.match(rescue, /multi-line task text/i);
-  assert.match(rescue, /single quotes, backticks, or XML-style blocks/i);
+  assert.match(rescue, /quote combinations that cannot be preserved safely in the command, backticks, or XML-style blocks/i);
+  assert.match(rescue, /An apostrophe by itself is safe when the task text is passed as a double-quoted argument/i);
   assert.match(rescue, /absolute `--prompt-file` path/i);
   assert.match(rescue, /temporary path outside the repository checkout/i);
   assert.match(rescue, /normal file-write tool or other structured write path/i);
@@ -409,7 +410,8 @@ test("rescue runtime guidance forbids task --background", () => {
   assert.match(runtimeSkill, /If the free-text task begins with `\/`, treat that slash command as literal Antigravity task text/i);
   assert.match(runtimeSkill, /Do not add `--quiet-progress` by default for built-in rescue forwarding/i);
   assert.match(runtimeSkill, /Let companion stderr progress remain available in the spawned agent thread/i);
-  assert.match(runtimeSkill, /prefer staging it in a temporary prompt file and pass it through `--prompt-file` instead of inlining it in one shell string/i);
+  assert.match(runtimeSkill, /prefer staging it in a temporary prompt file and pass it through `--prompt-file`/i);
+  assert.match(runtimeSkill, /An apostrophe by itself is safe when the task text is passed as a double-quoted argument/i);
   assert.match(runtimeSkill, /prefer a temporary path outside the repository checkout/i);
   assert.match(runtimeSkill, /Use a structured file-write path to create that prompt file/i);
   assert.match(runtimeSkill, /ignore the progress chatter and preserve only the final stdout-equivalent result text/i);
