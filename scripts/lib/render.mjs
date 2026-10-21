@@ -400,6 +400,12 @@ export function renderStoredJobResult(job, storedJob) {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
+/**
+ * @param {*} job The committed job record.
+ * @param {{ cancelled: boolean, note?: string } | null} [cancelResult] This caller's cancel outcome.
+ * @param {number | null} [attemptedPid] The PID this caller targeted; used for the
+ *   cleanup hint only when `cancelResult.cancelled === false`.
+ */
 export function renderCancelReport(job, cancelResult = null, attemptedPid = null) {
   const outcome = job.status === "cancel_failed"
     ? `Could not cancel ${job.id}.`
@@ -415,9 +421,9 @@ export function renderCancelReport(job, cancelResult = null, attemptedPid = null
   const cancelIncomplete =
     job.status === "cancel_failed" || cancelResult?.cancelled === false;
   // The winning transition (e.g. `completed`) clears pid/pgid from the stored job,
-  // so fall back to the process this cancel attempt actually targeted.
+  // so fall back to the process this cancel attempt targeted but did not stop.
   const cleanupTarget =
-    job.pgid ?? job.pid ?? cancelResult?.pgid ?? cancelResult?.pid ?? attemptedPid;
+    job.pgid ?? job.pid ?? (cancelResult?.cancelled === false ? attemptedPid : null);
   if (cancelIncomplete && cleanupTarget) {
     lines.push(`- Warning: Process group may still be alive. Manual cleanup: kill -9 -${cleanupTarget}`);
   }

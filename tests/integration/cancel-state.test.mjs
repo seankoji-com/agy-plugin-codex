@@ -68,7 +68,8 @@ async function runCase(kind) {
     assert.equal(payload.status, stored.status, "cancel response must agree with the committed job status");
   } finally {
     // Only captured handles from this fixture can be stopped here.
-    if (command && command.exitCode === null && command.signalCode === null) { command.kill("SIGKILL"); await commandExit; }
+    // A command that never spawned has no PID and may never emit close.
+    if (command?.pid && command.exitCode === null && command.signalCode === null) { command.kill("SIGKILL"); await commandExit.catch(() => {}); }
     if (worker && worker.exitCode === null && worker.signalCode === null) { worker.kill("SIGKILL"); await workerExit; }
     fs.rmSync(repo, { recursive: true, force: true });
   }

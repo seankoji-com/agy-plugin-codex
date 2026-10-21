@@ -2088,19 +2088,24 @@ async function cancelTrackedJob(workspaceRoot, job, errorMessage) {
   const transition = beginJobCancellation(workspaceRoot, job.id);
   if (!transition.transitioned) {
     const status = transition.job?.status ?? job.status;
-    // The caller lost the `cancelling` CAS: another actor owns the job now. If a
-    // process is still recorded and the winner has not already reported a terminal
-    // cancel outcome, that process may still be running, so the report must warn.
-    const attempted = transition.job?.pgid ?? transition.job?.pid ?? job.pgid ?? job.pid ?? null;
-    const mayStillRun =
-      Boolean(attempted) && status !== "cancelled" && status !== "cancel_failed";
+    // The caller lost the `cancelling` CAS: another actor owns the job now. While
+    // the stored job is still active, its recorded process may still be running,
+    // so the report must warn. Terminal winners clear the process fields.
+    const attempted = transition.job?.pgid ?? transition.job?.pid ?? null;
+    const mayStillRun = Boolean(attempted) && isActiveJobStatus(status);
+    const cancelResult = mayStillRun
+      ? { cancelled: false, note: "Cancellation transition lost while the job was still active." }
+      : null;
     return {
       job: { ...job, status, phase: status },
-      cancelResult: mayStillRun
-        ? { cancelled: false, note: "Cancellation transition lost while the job was still active." }
-        : null,
+      cancelResult,
       attempted,
-      payload: { jobId: job.id, status, title: job.title },
+      payload: {
+        jobId: job.id,
+        status,
+        title: job.title,
+        ...(cancelResult ? { note: cancelResult.note } : {}),
+      },
     };
   }
 

@@ -24,12 +24,10 @@ function fixture(run) {
   try {
     assert.equal(spawnSync("git", ["init", "--initial-branch=main"], { cwd: repo }).status, 0);
     Date.now = () => clock.now;
-    // Only zero-signal liveness probes are allowed. Never signal any PID.
+    // Only zero-signal liveness probes are allowed. Never signal any PID. The
+    // reaper swallows probe errors, so probes are checked after the test body.
     process.kill = (pid, signal) => {
-      assert.equal(signal, 0, "the fixture must not deliver a signal");
-      probes.push(pid);
-      if (pid === process.pid) return true;
-      assert.ok(pid === DEAD_TARGET_PID || pid === DEAD_OWNER_PID, "unexpected PID probe");
+      probes.push({ pid, signal });
       throw Object.assign(new Error("fixture process is gone"), { code: "ESRCH" });
     };
     const job = {
@@ -47,7 +45,13 @@ function fixture(run) {
       clock.now = Math.max(...[current.updatedAt, current.startedAt, current.createdAt].map(Date.parse)) + 2_001;
       return current;
     };
-    return run({ repo, job, enter, activeOwner, clock, probes });
+    const result = run({ repo, job, enter, activeOwner, clock, probes });
+    // The live owner (process.pid) must be recognised by identity, never a PID probe.
+    for (const probe of probes) {
+      assert.equal(probe.signal, 0, "the fixture must not deliver a signal");
+      assert.ok(probe.pid === DEAD_TARGET_PID || probe.pid === DEAD_OWNER_PID, `unexpected PID probe ${probe.pid}`);
+    }
+    return result;
   } finally {
     Date.now = realNow;
     process.kill = realKill;

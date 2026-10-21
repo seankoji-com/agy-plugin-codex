@@ -1715,7 +1715,8 @@ describe("agy-companion integration", () => {
           testEnv.workspaceDir,
           "--background",
           "--json",
-          "resume-a-active delay=3000",
+          // Stays active for every assertion below, even on slow runners; cancelled at the end.
+          "resume-a-active delay=60000",
         ],
         { env: sessionAEnv }
       );
@@ -1770,6 +1771,11 @@ describe("agy-companion integration", () => {
       assert.equal(markerCandidateC.sessionId, "session-c");
       assert.equal(markerCandidateC.candidate, null);
 
+      const cancelActiveA = runCompanionJson(
+        ["cancel", "--cwd", testEnv.workspaceDir, "--json", activeA.jobId],
+        { env: sessionAEnv }
+      );
+      assert.equal(cancelActiveA.status, "cancelled");
       await waitForTerminalResult(testEnv, activeA.jobId, sessionAEnv);
     } finally {
       cleanupTestEnvironment(testEnv);

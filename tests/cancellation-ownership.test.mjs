@@ -13,18 +13,16 @@ import { beginJobCancellation, cancellationOwnerState, writeJobFile, readJobFile
 
 function fixture(run) {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cancel-ownership-"));
-  const realKill = process.kill;
   const realNow = Date.now;
+  // Tests set clock.now to freeze time; null follows the real clock.
+  const clock = { now: null };
   try {
     assert.equal(spawnSync("git", ["init", "--initial-branch=main"], { cwd: repo }).status, 0);
-    process.kill = (_pid, signal) => {
-      assert.equal(signal, 0);
-      throw Object.assign(new Error("owned fixture is gone"), { code: "ESRCH" });
-    };
+    Date.now = () => clock.now ?? realNow();
+    // The target PID is above every platform's PID limit, so identity probes find no process.
     writeJobFile(repo, "job", { id: "job", workspaceRoot: repo, status: "running", pid: 2_147_483_000, pidIdentity: "target-start", createdAt: new Date().toISOString() });
-    return run(repo);
+    return run(repo, clock);
   } finally {
-    process.kill = realKill;
     Date.now = realNow;
     fs.rmSync(repo, { recursive: true, force: true });
   }
@@ -94,10 +92,9 @@ it("treats missing ownership as legacy recovery", () => {
 });
 
 for (const gone of [false, true]) {
-  it(`handles uncertain identity with owner ${gone ? "gone" : "still present"} without trusting PID identity`, () => fixture(repo => {
+  it(`handles uncertain identity with owner ${gone ? "gone" : "still present"} without trusting PID identity`, () => fixture((repo, clock) => {
     const pending = beginJobCancellation(repo, "job", { identityImpl: () => "owner-start" }).job;
-    const epoch = Math.max(...[pending.updatedAt, pending.createdAt].map(Date.parse));
-    Date.now = () => epoch + 2_001;
+    clock.now = Math.max(...[pending.updatedAt, pending.createdAt].map(Date.parse)) + 2_001;
     const result = reapStaleJobs(repo, [pending], { identityImpl: denied, killImpl: () => { if (gone) throw Object.assign(new Error("gone"), { code: "ESRCH" }); } })[0];
     assert.equal(result.status, gone ? "failed" : "cancelling");
   }));

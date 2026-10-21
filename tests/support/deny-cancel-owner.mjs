@@ -18,7 +18,11 @@ if (process.env.CANCEL_OWNER_REFUSAL_FIFO) {
     const once = process.once;
     process.once = function (event, listener) {
       const result = once.call(this, event, listener);
-      if (event === "SIGINT") process.stderr.write("[fixture] interrupt handler ready\n");
+      // Only the foreground wait's handler gates readiness; another SIGINT
+      // registration in this process must not release the test early.
+      if (event === "SIGINT" && new Error().stack?.includes("runForegroundReviewCommand")) {
+        process.stderr.write("[fixture] interrupt handler ready\n");
+      }
       return result;
     };
   }

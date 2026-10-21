@@ -633,7 +633,7 @@ describe("renderStoredJobResult", () => {
 // ---------------------------------------------------------------------------
 
 describe("renderCancelReport", () => {
-  for (const status of ["completed", "failed", "running"]) {
+  for (const status of ["completed", "failed", "running", "cancelling"]) {
     it(`reports the actual ${status} state without claiming cancellation`, () => {
       const output = renderCancelReport({ id: "j1", status });
       assert.ok(output.includes(`Job j1 is ${status}.`));
@@ -665,4 +665,26 @@ describe("renderCancelReport", () => {
     assert.ok(output.includes("Manual cleanup"));
     assert.ok(output.includes("kill -9 -12345"));
   });
+
+  it("warns when another actor won the status but this cancel did not stop the recorded group", () => {
+    const output = renderCancelReport({ id: "j1", status: "completed", pgid: 12345 }, { cancelled: false });
+    assert.ok(output.includes("kill -9 -12345"));
+  });
+
+  it("does not warn when this cancel stopped the recorded group", () => {
+    const output = renderCancelReport({ id: "j1", status: "completed", pgid: 12345 }, { cancelled: true });
+    assert.ok(!output.includes("Manual cleanup"));
+  });
+
+  it("falls back to the attempted PID when the winning status cleared the stored process", () => {
+    const output = renderCancelReport({ id: "j1", status: "completed" }, { cancelled: false }, 12345);
+    assert.ok(output.includes("kill -9 -12345"));
+  });
+
+  for (const cancelResult of [{ cancelled: true }, { cancelled: true, note: "Process not found" }, null]) {
+    it(`ignores the attempted PID unless this cancel failed (${JSON.stringify(cancelResult)})`, () => {
+      const output = renderCancelReport({ id: "j1", status: "completed" }, cancelResult, 12345);
+      assert.ok(!output.includes("Manual cleanup"));
+    });
+  }
 });
