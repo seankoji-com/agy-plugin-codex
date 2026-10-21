@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import "./support/isolate-codex-home.mjs";
-import { describe, it, before, afterEach } from "node:test";
+import { describe, it, before, after, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -173,6 +173,10 @@ describe("readJobProgressPreview", () => {
 
   before(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "jc-test-"));
+  });
+
+  after(() => {
+    if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   afterEach(() => {
