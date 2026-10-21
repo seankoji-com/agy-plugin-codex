@@ -7,6 +7,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 
 // ---------------------------------------------------------------------------
 // IMPORT ORDERING CONTRACT
@@ -543,14 +545,36 @@ describe("buildAgyArgs", () => {
 // ===========================================================================
 
 describe("runAgyTurn", () => {
+  const cwd = process.cwd();
+
+  it("returns failed on an asynchronous spawn error without recording a child PID", async () => {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.pid = undefined;
+    child.exitCode = null;
+    let spawnCallbackCalled = false;
+    const result = await agy.runAgyTurn(cwd, "my prompt", {
+      spawnImpl: () => {
+        setImmediate(() => child.emit("error", Object.assign(new Error("spawn agy ENOENT"), { code: "ENOENT" })));
+        return child;
+      },
+      onSpawn: () => { spawnCallbackCalled = true; },
+    });
+
+    assert.equal(result.status, "failed");
+    assert.equal(result.exitCode, -1);
+    assert.match(result.warning, /spawn agy ENOENT/);
+    assert.equal(result.pid, null);
+    assert.equal(spawnCallbackCalled, false);
+  });
+
   // spawn of the fake shebang binary is not possible on Windows; see the
   // module-level comment. The bridge is covered by Full CI on macOS/Ubuntu.
   if (process.platform === "win32") {
     it.skip("spawn-based turn execution (POSIX only)", () => {});
     return;
   }
-  // Use a scratch cwd so the spawned fake runs somewhere harmless.
-  const cwd = process.cwd();
 
   async function runTurn(envPatch = {}, options = {}) {
     const argsFile = path.join(

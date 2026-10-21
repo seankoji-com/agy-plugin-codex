@@ -9,6 +9,9 @@ Primary helper:
 - `node "<plugin-root>/scripts/agy-companion.mjs" adversarial-review ...`
 
 Execution boundary:
+- Prefer separate argv values for paths. In the companion's one-raw-string form, single quotes preserve backslashes literally; outside single quotes, including inside double quotes, backslashes escape the next character. A backslash before a single quote inside single quotes is literal, so it does not escape that quote: `'it\'s'` closes the quote before `s`, and the parser rejects the apostrophe left after that closed option value. Pass values containing that sequence as separate argv values. Preserve the raw string through the calling shell or tool as well.
+- Pass `--cwd` paths containing quotes or backslashes as separate argv values.
+- `review` and `adversarial-review` have no `--prompt-file` option; only `task` registers it. The companion would treat `--prompt-file <path>` as review focus text, so do not stage focus text in a file. Keep it safe for the calling shell instead: avoid `$(...)`, `${...}`, a bare `$`, backticks, and `!` inside double quotes.
 - Foreground review stays on the main Codex thread. Do not satisfy it through a review subagent or generic review-runner role. The companion itself persists one tracked worker before waiting so a timeout remains recoverable.
 - Background review uses exactly one built-in forwarding child through `spawn_agent`.
 - Never satisfy either mode with raw `agy` invocations, hand-rolled `bash -lc ...agy...`, or detached companion shell backgrounding.

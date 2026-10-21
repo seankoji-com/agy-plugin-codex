@@ -112,10 +112,18 @@ function isRecognizedOptionToken(token, valueOptions, booleanOptions, aliasMap) 
   return valueOptions.has(key) || booleanOptions.has(key);
 }
 
+// A quote opened as an option value (`--cwd '...'`, `-C '...'`, `--cwd='...'`)
+// must close cleanly; free-text apostrophes elsewhere stay literal.
+function isOptionShaped(token) {
+  return /^-[^-\s]|^--[^\s=]/.test(token);
+}
+
 export function splitRawArgumentString(raw) {
   const tokens = [];
   let current = "";
   let quote = null;
+  let quoteIsValue = false;
+  let closedValueQuote = false;
   let escaping = false;
 
   for (const character of raw) {
@@ -125,13 +133,14 @@ export function splitRawArgumentString(raw) {
       continue;
     }
 
-    if (character === "\\") {
+    if (character === "\\" && quote !== "'") {
       escaping = true;
       continue;
     }
 
     if (quote) {
       if (character === quote) {
+        closedValueQuote ||= quoteIsValue && quote === "'";
         quote = null;
       } else {
         current += character;
@@ -139,8 +148,18 @@ export function splitRawArgumentString(raw) {
       continue;
     }
 
-    if (character === "'" || character === "\"") {
+    if (character === "\"" || (character === "'" && (!current || current.endsWith("=")))) {
       quote = character;
+      quoteIsValue = current
+        ? isOptionShaped(current)
+        : tokens.length > 0 && isOptionShaped(tokens[tokens.length - 1]);
+      continue;
+    }
+
+    if (character === "'") {
+      // `--cwd 'C:\it's'` closes the value at `it`; reject rather than mangle it.
+      if (closedValueQuote) throw new Error("Unterminated quote in raw argument string");
+      current += character;
       continue;
     }
 
@@ -149,10 +168,16 @@ export function splitRawArgumentString(raw) {
         tokens.push(current);
         current = "";
       }
+      closedValueQuote = false;
       continue;
     }
 
     current += character;
+  }
+
+  if (quote) {
+    if (quoteIsValue) throw new Error("Unterminated quote in raw argument string");
+    return [raw];
   }
 
   if (escaping) {

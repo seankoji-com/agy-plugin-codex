@@ -539,7 +539,7 @@ export async function runAgyTurn(cwd, prompt, options = {}) {
   return new Promise((resolve) => {
     let proc;
     try {
-      proc = spawn(AGY_BIN, args, {
+      proc = (options.spawnImpl ?? spawn)(AGY_BIN, args, {
         cwd,
         env: options.env
           ? { ...process.env, ...options.env }
@@ -570,7 +570,7 @@ export async function runAgyTurn(cwd, prompt, options = {}) {
       // Best-effort — may fail on some platforms
     }
 
-    if (options.onSpawn) {
+    if (options.onSpawn && Number.isInteger(proc.pid) && proc.pid > 0) {
       options.onSpawn({ pid: proc.pid, pidIdentity });
     }
 
@@ -610,7 +610,7 @@ export async function runAgyTurn(cwd, prompt, options = {}) {
           timedOut,
           timeoutMs,
         }),
-        pid: proc.pid,
+        pid: Number.isInteger(proc.pid) && proc.pid > 0 ? proc.pid : null,
         pidIdentity,
       });
     };
@@ -628,7 +628,7 @@ export async function runAgyTurn(cwd, prompt, options = {}) {
         finalMessage: "",
         structuredOutput: null,
         stderr: err.message,
-        pid: proc.pid,
+        pid: Number.isInteger(proc.pid) && proc.pid > 0 ? proc.pid : null,
         pidIdentity,
         serviceLimited: false,
       });

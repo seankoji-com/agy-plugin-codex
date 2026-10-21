@@ -18,6 +18,13 @@ import {
 
 // node may not be on PATH in this test environment; find it once
 const NODE_BIN = process.execPath;
+const missingCommandSpawn = () => ({
+  status: null,
+  signal: null,
+  stdout: "",
+  stderr: "",
+  error: Object.assign(new Error("spawn missing command ENOENT"), { code: "ENOENT" }),
+});
 
 // ---------------------------------------------------------------------------
 // runCommand
@@ -37,15 +44,46 @@ describe("runCommand", () => {
     assert.equal(result.stderr, "oops");
   });
 
+  it("captures stdout produced before a non-zero exit", () => {
+    const result = runCommand(NODE_BIN, ["-e", "process.stdout.write('ran'); process.exit(7)"]);
+    assert.equal(result.stdout, "ran");
+    assert.equal(result.status, 7);
+    assert.equal(result.error, null);
+  });
+
   it("reports non-zero exit code", () => {
     const result = runCommand(NODE_BIN, ["-e", "process.exit(42)"]);
     assert.equal(result.status, 42);
   });
 
   it("reports ENOENT for missing command", () => {
-    const result = runCommand("definitely-not-a-real-command-xyz");
+    const result = runCommand("definitely-not-a-real-command-xyz", [], {
+      spawnSyncImpl: missingCommandSpawn,
+    });
     assert.ok(result.error);
     assert.equal(result.error.code, "ENOENT");
+  });
+
+  it("reports ENOENT for a missing command from a real spawn", (t) => {
+    const result = runCommand("definitely-not-a-real-command-xyz");
+    if (result.error?.code && result.error.code !== "ENOENT") {
+      t.skip("the execution environment blocks missing-command probes");
+      return;
+    }
+    assert.ok(result.error);
+    assert.equal(result.error.code, "ENOENT");
+  });
+
+  it("preserves a non-ENOENT spawn error for deterministic coverage", () => {
+    const blockedSpawn = () => ({
+      status: null,
+      signal: null,
+      stdout: "",
+      stderr: "",
+      error: Object.assign(new Error("spawn blocked command EACCES"), { code: "EACCES" }),
+    });
+    const result = runCommand("blocked-command", [], { spawnSyncImpl: blockedSpawn });
+    assert.equal(result.error?.code, "EACCES");
   });
 
   it("preserves command and args in result", () => {
@@ -119,7 +157,9 @@ describe("runCommandChecked", () => {
 
   it("throws the actual Error for ENOENT", () => {
     assert.throws(
-      () => runCommandChecked("no-such-binary-xyz"),
+      () => runCommandChecked("no-such-binary-xyz", [], {
+        spawnSyncImpl: missingCommandSpawn,
+      }),
       (err) => err.code === "ENOENT"
     );
   });
@@ -137,7 +177,9 @@ describe("binaryAvailable", () => {
   });
 
   it("returns available:false for missing binary", () => {
-    const result = binaryAvailable("not-real-binary-xyz");
+    const result = binaryAvailable("not-real-binary-xyz", ["--version"], {
+      spawnSyncImpl: missingCommandSpawn,
+    });
     assert.equal(result.available, false);
     assert.equal(result.detail, "not found");
   });

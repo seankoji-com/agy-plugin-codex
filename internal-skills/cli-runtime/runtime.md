@@ -23,6 +23,7 @@ Command selection:
 - The caller's background or foreground choice changes only subagent execution. It does not change the companion command you build.
 
 Routing controls:
+- Prefer separate argv values for paths. In the companion's one-raw-string form, single quotes preserve backslashes literally; outside single quotes, including inside double quotes, backslashes escape the next character. A backslash before a single quote inside single quotes is literal, so it does not escape that quote: `'it\'s'` closes the quote before `s`, and the parser rejects the apostrophe left after that closed option value. Pass values containing that sequence as separate argv values. Preserve the raw string through the calling shell or tool as well.
 - Treat `--model`, `--effort`, `--resume`, `--resume-last`, `--fresh`, `--prompt-file`, `--view-state`, `--owner-session-id`, and `--job-id` as routing controls, not task text.
 - Leave `--model` and `--effort` unset unless the user explicitly asks for a specific model or effort. The companion command defaults model to `flash-medium` and forwards no `--effort` at all, so `flash-low`, `flash-medium`, and `flash-high` each keep whatever effort Antigravity defaults to for them. Antigravity owns which effort levels each model supports; this plugin owns no per-model effort table.
 - Forward an explicit `--model` value unchanged to the companion. The companion trims surrounding whitespace, canonicalizes the friendly aliases `flash-low`, `flash-medium`, and `flash-high` to their catalog IDs (e.g. `gemini-3.8-flash-medium`), then forwards every other `--model` value unchanged to Antigravity. Antigravity owns alias resolution; `agy models` is the authoritative catalog for the current account and provider.
@@ -30,6 +31,7 @@ Routing controls:
 - `--view-state defer` means the parent is not waiting, so the companion must leave the result unread until the user explicitly checks it.
 - `--owner-session-id <session-id>` is an internal parent-session routing control. Preserve it when present so tracked jobs remain visible to the parent session's `$agy:status` / `$agy:result`.
 - Whenever the command includes a reserved `--job-id`, also include `--cwd <workspace-root>` using `workspaceRoot` from the same routing-context response. Reserved job ids are workspace-scoped.
+- Pass `--cwd` paths containing quotes or backslashes as separate argv values.
 - Never emit an empty routing placeholder such as `--owner-session-id  --job-id`.
 - Do not add `--quiet-progress` by default for built-in rescue forwarding. Let companion stderr progress remain available in the spawned agent thread.
 - If the free-text task begins with `/`, treat that slash command as literal Antigravity task text to forward unchanged. Do not execute it as a local Codex slash command or answer it inline.
@@ -42,7 +44,9 @@ Routing controls:
 Task defaults:
 - Default to `--write` unless the user explicitly wants read-only behavior or only review, diagnosis, or research without edits.
 - Preserve the user's task text apart from stripping routing flags.
-- If the resolved task text is multi-line, contains shell-hostile quoting, or includes XML-style blocks, prefer staging it in a temporary prompt file and pass it through `--prompt-file` instead of inlining it in one shell string.
+- If the resolved task text is multi-line, contains quote combinations that are difficult to preserve in the command, or includes XML-style blocks, prefer staging it in a temporary prompt file and pass it through `--prompt-file`. An apostrophe by itself is safe when the task text is passed as a double-quoted argument.
+- `--prompt-file` is a companion routing option for staging task text, not a Codex CLI runtime control. Use the companion's `task --prompt-file <path>` form and pass the path as a separate argv value. Review commands have no such option, so their focus text must stay shell-safe; see the review runtime reference.
+- Also stage task text in a prompt file when the calling shell could expand it inside double quotes, including `$(...)`, `${...}`, or a bare `$`, or when `!` could trigger interactive shell history expansion.
 - When staging a prompt file, keep the exact task text byte-for-byte and prefer a temporary path outside the repository checkout so the rescue flow does not dirty the repo.
 - Use a structured file-write path to create that prompt file when possible. Do not solve shell quoting by wrapping the same long task inside another brittle inline shell command.
 - If the tool output includes stderr progress chatter and a final stdout-style result, ignore the progress chatter and preserve only the final stdout-equivalent result text.
