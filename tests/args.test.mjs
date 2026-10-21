@@ -286,6 +286,34 @@ describe("splitRawArgumentString", () => {
         /Unterminated quote/
       );
     });
+
+    it("rejects an apostrophe after a closed option-value quote", () => {
+      for (const raw of [
+        String.raw`--json --cwd 'C:\it's'`,
+        String.raw`--cwd='C:\it's'`,
+        "--write 'it''s'"
+      ]) {
+        assert.throws(() => splitRawArgumentString(raw), /Unterminated quote/, raw);
+      }
+    });
+
+    it("rejects an unterminated quote after a short option", () => {
+      assert.throws(() => splitRawArgumentString(String.raw`-C 'C:\my repo`), /Unterminated quote/);
+    });
+
+    it("keeps a separator and apostrophes in free text", () => {
+      assert.deepEqual(splitRawArgumentString("don't -- it's fine"), ["don't", "--", "it's", "fine"]);
+    });
+
+    it("keeps free text with a dashed word and an unmatched quote whole", () => {
+      for (const raw of [
+        "fix the --verbose flag, it's 'broken",
+        "explain why -- and 'quotes break",
+        "rename the well-known 'thing"
+      ]) {
+        assert.deepEqual(splitRawArgumentString(raw), [raw]);
+      }
+    });
   });
 
   describe("escape sequences", () => {

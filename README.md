@@ -338,7 +338,7 @@ curl -fsSL "https://raw.githubusercontent.com/seankoji-com/agy-plugin-codex/main
 ## Troubleshooting
 
 **Paths containing backslashes in companion commands**
-Prefer passing each companion argument separately. If all options are passed as one raw argument string, single quotes preserve literal backslashes, for example `--cwd 'C:\work\my repo' --json`. Outside single quotes, including inside double quotes, a backslash escapes the next character. This describes the companion's raw-string parser; the calling shell or tool must also preserve the string it sends. A backslash inside single quotes is literal before a quote, so it does not escape a lone `'`. The raw string `'it\'s'` closes the quote before `s`, then leaves a new quote unterminated; the parser rejects it. Pass such a value as a separate argument instead of embedding it in the raw string.
+Prefer passing each companion argument separately. If all options are passed as one raw argument string, single quotes preserve literal backslashes, for example `--cwd 'C:\work\my repo' --json`. Outside single quotes, including inside double quotes, a backslash escapes the next character. This describes the companion's raw-string parser; the calling shell or tool must also preserve the string it sends. A backslash inside single quotes is literal before a quote, so it does not escape a lone `'`. As an option value, `--cwd 'it\'s'` closes the quote before `s`, and the parser rejects the apostrophe left after it. Pass such a value as a separate argument instead of embedding it in the raw string.
 
 **`$agy:setup` reports the Antigravity CLI not found**
 ```bash

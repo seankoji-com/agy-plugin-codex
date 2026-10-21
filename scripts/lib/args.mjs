@@ -112,17 +112,18 @@ function isRecognizedOptionToken(token, valueOptions, booleanOptions, aliasMap) 
   return valueOptions.has(key) || booleanOptions.has(key);
 }
 
-export function splitRawArgumentString(raw) {
-  const isOptionInput = /(?:^|\s)--[^\s=]+(?:\s|=|$)/.test(raw);
-  const hasEscapedQuoteInCwd = /(?:^|\s)--cwd(?:=|\s+)'[^']*\\'/.test(raw);
-  if (hasEscapedQuoteInCwd || hasUnterminatedQuote(raw)) {
-    if (isOptionInput) throw new Error("Unterminated quote in raw argument string");
-    return [raw];
-  }
+// A quote opened as an option value (`--cwd '...'`, `-C '...'`, `--cwd='...'`)
+// must close cleanly; free-text apostrophes elsewhere stay literal.
+function isOptionShaped(token) {
+  return /^-[^-\s]|^--[^\s=]/.test(token);
+}
 
+export function splitRawArgumentString(raw) {
   const tokens = [];
   let current = "";
   let quote = null;
+  let quoteIsValue = false;
+  let closedValueQuote = false;
   let escaping = false;
 
   for (const character of raw) {
@@ -139,6 +140,7 @@ export function splitRawArgumentString(raw) {
 
     if (quote) {
       if (character === quote) {
+        closedValueQuote ||= quoteIsValue && quote === "'";
         quote = null;
       } else {
         current += character;
@@ -148,10 +150,15 @@ export function splitRawArgumentString(raw) {
 
     if (character === "\"" || (character === "'" && (!current || current.endsWith("=")))) {
       quote = character;
+      quoteIsValue = current
+        ? isOptionShaped(current)
+        : tokens.length > 0 && isOptionShaped(tokens[tokens.length - 1]);
       continue;
     }
 
     if (character === "'") {
+      // `--cwd 'C:\it's'` closes the value at `it`; reject rather than mangle it.
+      if (closedValueQuote) throw new Error("Unterminated quote in raw argument string");
       current += character;
       continue;
     }
@@ -161,10 +168,16 @@ export function splitRawArgumentString(raw) {
         tokens.push(current);
         current = "";
       }
+      closedValueQuote = false;
       continue;
     }
 
     current += character;
+  }
+
+  if (quote) {
+    if (quoteIsValue) throw new Error("Unterminated quote in raw argument string");
+    return [raw];
   }
 
   if (escaping) {
@@ -176,33 +189,4 @@ export function splitRawArgumentString(raw) {
   }
 
   return tokens;
-}
-
-function hasUnterminatedQuote(raw) {
-  let quote = null;
-  let escaping = false;
-  let token = "";
-  for (let index = 0; index < raw.length; index += 1) {
-    const character = raw[index];
-    if (escaping) {
-      escaping = false;
-      continue;
-    }
-    if (character === "\\" && quote !== "'") {
-      escaping = true;
-      continue;
-    }
-    if (quote) {
-      if (character === quote) quote = null;
-    } else if (character === '"' || (character === "'" && (!token || token.endsWith("=")))) {
-      quote = character;
-    } else if (character === "'") {
-      token += character;
-    } else if (/\s/.test(character)) {
-      token = "";
-    } else {
-      token += character;
-    }
-  }
-  return quote !== null;
 }
