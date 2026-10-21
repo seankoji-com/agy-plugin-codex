@@ -1614,7 +1614,7 @@ describe("agy-companion integration", () => {
 
       assert.equal(payload.ownerSessionId, "env-session");
       assert.equal(payload.parentThreadId, "thread-123");
-      assert.equal(payload.workspaceRoot, testEnv.workspaceDir);
+      assert.equal(payload.workspaceRoot, fs.realpathSync.native(testEnv.workspaceDir));
     } finally {
       cleanupTestEnvironment(testEnv);
     }

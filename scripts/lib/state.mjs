@@ -24,7 +24,7 @@ import {
   resolvePluginsDataRoot,
   samePath,
 } from "./codex-paths.mjs";
-import { resolveWorkspaceRoot } from "./workspace.mjs";
+import { canonicalizeWorkspacePath, resolveWorkspaceRoot } from "./workspace.mjs";
 import { isProcessAlive, validateProcessIdentity, getProcessIdentity } from "./process.mjs";
 
 const STATE_VERSION = 1;
@@ -359,7 +359,10 @@ export function generateJobId(prefix = "job") {
 export function writeJobFile(cwd, jobId, payload) {
   ensureStateDir(cwd);
   const jobFile = resolveJobFile(cwd, jobId);
-  writeAtomic(jobFile, { ...payload, updatedAt: nowIso() });
+  const persistedPayload = typeof payload.workspaceRoot === "string"
+    ? { ...payload, workspaceRoot: canonicalizeWorkspacePath(payload.workspaceRoot) }
+    : payload;
+  writeAtomic(jobFile, { ...persistedPayload, updatedAt: nowIso() });
   return jobFile;
 }
 
@@ -517,7 +520,7 @@ export function upsertJob(cwd, jobPatch) {
     ? { ...existing, ...jobPatch, updatedAt: timestamp }
     : { createdAt: timestamp, updatedAt: timestamp, ...jobPatch };
   writeJobFile(cwd, job.id, job);
-  return job;
+  return readJobFile(cwd, job.id) ?? job;
 }
 
 export function patchJob(cwd, jobId, patch) {
@@ -532,7 +535,7 @@ export function patchJob(cwd, jobId, patch) {
     updatedAt: nowIso(),
   };
   writeJobFile(cwd, jobId, next);
-  return next;
+  return readJobFile(cwd, jobId) ?? next;
 }
 
 // ---------------------------------------------------------------------------

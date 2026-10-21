@@ -200,10 +200,42 @@ describe("splitRawArgumentString", () => {
       );
     });
 
+    it("preserves an apostrophe inside a double-quoted task argument", () => {
+      assert.deepEqual(splitRawArgumentString('"it\'s safe"'), ["it's safe"]);
+    });
+
     it("handles single-quoted strings", () => {
       assert.deepEqual(
         splitRawArgumentString("hello 'world wide' test"),
         ["hello", "world wide", "test"]
+      );
+    });
+
+    it("preserves single-quoted Windows paths", () => {
+      assert.deepEqual(
+        splitRawArgumentString(String.raw`--cwd 'C:\work\my repo' --json`),
+        ["--cwd", String.raw`C:\work\my repo`, "--json"]
+      );
+    });
+
+    it("preserves single-quoted UNC paths and trailing separators", () => {
+      assert.deepEqual(
+        splitRawArgumentString("'\\\\server\\share\\' next"),
+        ["\\\\server\\share\\", "next"]
+      );
+    });
+
+    it("keeps a backslash literal before a space or double quote in single quotes", () => {
+      assert.deepEqual(
+        splitRawArgumentString(String.raw`'one\ two\"three'`),
+        [String.raw`one\ two\"three`]
+      );
+    });
+
+    it("retains double-quoted and unquoted backslash escaping", () => {
+      assert.deepEqual(
+        splitRawArgumentString(String.raw`"one\ two" three\ four`),
+        ["one two", "three four"]
       );
     });
 
@@ -216,6 +248,71 @@ describe("splitRawArgumentString", () => {
         splitRawArgumentString('pre"quoted"post'),
         ["prequotedpost"]
       );
+    });
+
+    it("preserves unmatched apostrophes in arbitrary task text", () => {
+      const task = "Please don't rewrite the user's prompt";
+      assert.equal(splitRawArgumentString(task).join(" "), task);
+    });
+
+    it("tokenizes a contraction followed by an option exactly", () => {
+      assert.deepEqual(splitRawArgumentString("don't --json"), ["don't", "--json"]);
+    });
+
+    it("preserves apostrophes in valid unquoted paths", () => {
+      const path = "/Users/o'brien/repo";
+      assert.deepEqual(splitRawArgumentString(`--cwd ${path} --json`), ["--cwd", path, "--json"]);
+    });
+
+    it("preserves apostrophes in unquoted cwd paths after another option", () => {
+      const path = "/Users/o'brien/repo";
+      assert.deepEqual(splitRawArgumentString(`--json --cwd ${path}`), ["--json", "--cwd", path]);
+    });
+
+    it("rejects an unterminated quote after another option", () => {
+      assert.throws(() => splitRawArgumentString("--json --cwd 'unfinished"), /Unterminated quote/);
+    });
+
+    it("rejects an unterminated quote when a quoted value precedes the options", () => {
+      assert.throws(
+        () => splitRawArgumentString("'workspace with spaces' --json --cwd 'unfinished"),
+        /Unterminated quote/
+      );
+    });
+
+    it("rejects an unterminated raw cwd quote", () => {
+      assert.throws(
+        () => splitRawArgumentString(String.raw`--cwd 'it\'s' --json`),
+        /Unterminated quote/
+      );
+    });
+
+    it("rejects an apostrophe after a closed option-value quote", () => {
+      for (const raw of [
+        String.raw`--json --cwd 'C:\it's'`,
+        String.raw`--cwd='C:\it's'`,
+        "--write 'it''s'"
+      ]) {
+        assert.throws(() => splitRawArgumentString(raw), /Unterminated quote/, raw);
+      }
+    });
+
+    it("rejects an unterminated quote after a short option", () => {
+      assert.throws(() => splitRawArgumentString(String.raw`-C 'C:\my repo`), /Unterminated quote/);
+    });
+
+    it("keeps a separator and apostrophes in free text", () => {
+      assert.deepEqual(splitRawArgumentString("don't -- it's fine"), ["don't", "--", "it's", "fine"]);
+    });
+
+    it("keeps free text with a dashed word and an unmatched quote whole", () => {
+      for (const raw of [
+        "fix the --verbose flag, it's 'broken",
+        "explain why -- and 'quotes break",
+        "rename the well-known 'thing"
+      ]) {
+        assert.deepEqual(splitRawArgumentString(raw), [raw]);
+      }
     });
   });
 

@@ -92,6 +92,27 @@ describe("resolveWorkspaceHash", () => {
     const h2 = resolveWorkspaceHash(PROJECT_CWD);
     assert.equal(h1, h2);
   });
+
+  it("persists a canonical workspace root when a job is written through an alias", () => {
+    const repoDir = createTempGitRepo();
+    const aliasDir = path.join(path.dirname(repoDir), `${path.basename(repoDir)}-alias`);
+    const jobId = "canonical-workspace-identity";
+
+    try {
+      fs.symlinkSync(repoDir, aliasDir, process.platform === "win32" ? "junction" : "dir");
+      const job = upsertJob(aliasDir, {
+        id: jobId,
+        workspaceRoot: aliasDir,
+        status: "queued",
+      });
+
+      assert.equal(job.workspaceRoot, fs.realpathSync.native(repoDir));
+      assert.equal(readJobFile(repoDir, jobId).workspaceRoot, fs.realpathSync.native(repoDir));
+    } finally {
+      fs.rmSync(aliasDir, { recursive: true, force: true });
+      fs.rmSync(repoDir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
