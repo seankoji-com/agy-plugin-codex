@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { testHomeEnv } from "../support/test-home-env.mjs";
 
 import { SESSION_ID_ENV } from "../../scripts/lib/tracked-jobs.mjs";
+import { getProcessIdentity } from "../../scripts/lib/process.mjs";
 
 const PROJECT_ROOT = path.resolve(
   fileURLToPath(new URL("../../", import.meta.url))
@@ -1714,7 +1715,8 @@ describe("agy-companion integration", () => {
           testEnv.workspaceDir,
           "--background",
           "--json",
-          "resume-a-active delay=3000",
+          // Stays active for every assertion below, even on slow runners; cancelled at the end.
+          "resume-a-active delay=60000",
         ],
         { env: sessionAEnv }
       );
@@ -1769,6 +1771,11 @@ describe("agy-companion integration", () => {
       assert.equal(markerCandidateC.sessionId, "session-c");
       assert.equal(markerCandidateC.candidate, null);
 
+      const cancelActiveA = runCompanionJson(
+        ["cancel", "--cwd", testEnv.workspaceDir, "--json", activeA.jobId],
+        { env: sessionAEnv }
+      );
+      assert.equal(cancelActiveA.status, "cancelled");
       await waitForTerminalResult(testEnv, activeA.jobId, sessionAEnv);
     } finally {
       cleanupTestEnvironment(testEnv);
@@ -2143,6 +2150,68 @@ describe("agy-companion integration", () => {
     } finally {
       cleanupTestEnvironment(testEnv);
     }
+  });
+
+  it("returns from foreground SIGINT when owner identity is unavailable without changing or killing the queued job", { skip: process.platform !== "linux", timeout: 10000 }, async (context) => {
+    const testEnv = createTestEnvironment();
+    const fifo = path.join(testEnv.rootDir, "owned-worker-barrier");
+    const invocation = path.join(testEnv.rootDir, "provider-invocation.json");
+    let child = null;
+    let closed = null;
+    context.after(async () => {
+      if (child?.exitCode == null && child?.signalCode == null) child?.kill("SIGKILL");
+      if (closed) await closed;
+      // The owned runtime records its spawned wrapper PID and identity here.
+      const key = createHash("sha256").update(fs.realpathSync.native(testEnv.workspaceDir)).digest("hex").slice(0, 12);
+      const jobs = path.join(testEnv.homeDir, ".codex", "plugins", "data", "agy", "state", key, "jobs");
+      if (fs.existsSync(jobs)) {
+        for (const name of fs.readdirSync(jobs).filter(name => name.endsWith(".json"))) {
+          const job = JSON.parse(fs.readFileSync(path.join(jobs, name), "utf8"));
+          if (job.pid && job.pidIdentity) {
+            try {
+              if (getProcessIdentity(job.pid) === job.pidIdentity) process.kill(job.pid, "SIGKILL");
+            } catch (error) {
+              if (!["ENOENT", "ESRCH"].includes(error?.code)) throw error;
+            }
+          }
+        }
+      }
+      cleanupTestEnvironment(testEnv);
+    });
+    setupGitWorkspace(testEnv.workspaceDir);
+    seedWorkingTreeDiff(testEnv.workspaceDir);
+    assert.equal(spawnSync("mkfifo", [fifo]).status, 0);
+    let stdout = "", stderr = "";
+    let readyResolve, readyReject;
+    const ready = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
+    context.signal.addEventListener("abort", () => readyReject(new Error("fixture readiness aborted")), { once: true });
+    child = spawn(process.execPath, [COMPANION_SCRIPT, "adversarial-review", "--cwd", testEnv.workspaceDir, "--timeout-ms", "5000", "--json", "fixture"], {
+      cwd: PROJECT_ROOT,
+      env: { ...testEnv.env, NODE_OPTIONS: `--import=${new URL("../support/deny-cancel-owner.mjs", import.meta.url).href}`, CANCEL_OWNER_REFUSAL_FIFO: fifo, AGY_INVOCATION_FILE: invocation },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    closed = new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", (code) => { readyReject(new Error(`closed before readiness: ${stderr}`)); resolve(code); });
+    });
+    child.stdout.on("data", chunk => { stdout += chunk; });
+    child.stderr.on("data", chunk => {
+      stderr += chunk;
+      const id = stderr.match(/Tracking foreground review as (review-[a-z0-9-]+)/i)?.[1];
+      if (id && stderr.includes("[fixture] interrupt handler ready")) readyResolve(id);
+    });
+    const id = await ready;
+    const before = readStoredJobById(testEnv, id);
+    assert.equal(before.status, "queued");
+    assert.ok(before.pid && before.pidIdentity);
+    child.kill("SIGINT");
+    assert.equal(await closed, 1);
+    assert.match(stderr, /cancelling process identity is unavailable/);
+    assert.equal(stdout, "");
+    const after = readStoredJobById(testEnv, id);
+    assert.deepEqual(after, before);
+    assert.equal(getProcessIdentity(after.pid), after.pidIdentity);
+    assert.equal(fs.existsSync(invocation), false);
   });
 
   it("cancels the tracked review when a foreground companion receives SIGINT", async () => {

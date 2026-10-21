@@ -71,6 +71,7 @@ import { loadPromptTemplate, interpolateTemplate } from "./lib/prompts.mjs";
 import { parseStructuredOutput } from "./lib/structured-output.mjs";
 import {
   ACTIVE_JOB_STATUSES,
+  beginJobCancellation,
   ensureStateDir,
   generateJobId,
   getConfig,
@@ -1359,9 +1360,11 @@ async function runForegroundReviewCommand(cwd, job, request, options = {}) {
   process.stderr.write(
     `[agy] Tracking foreground review as ${job.id}; waiting up to ${options.timeoutMs / 1000}s.\n`
   );
+  const waitController = new AbortController();
   const waitPromise = waitForSingleJobSnapshot(cwd, job.id, {
     timeoutMs: options.timeoutMs,
     pollIntervalMs: 100,
+    signal: waitController.signal,
   });
   let resolveSignal;
   const signalPromise = new Promise((resolve) => {
@@ -1379,6 +1382,7 @@ async function runForegroundReviewCommand(cwd, job, request, options = {}) {
       signalPromise.then((signal) => ({ signal })),
     ]);
     if ("signal" in outcome) {
+      waitController.abort();
       const storedJob = readStoredJob(job.workspaceRoot, job.id) ?? job;
       const cancellation = await cancelTrackedJob(
         job.workspaceRoot,
@@ -1388,7 +1392,7 @@ async function runForegroundReviewCommand(cwd, job, request, options = {}) {
       await waitPromise.catch(() => {});
       outputCommandResult(
         { ...cancellation.payload, signal: outcome.signal },
-        renderCancelReport(cancellation.job),
+        renderCancelReport(cancellation.job, cancellation.cancelResult, cancellation.attempted),
         options.json
       );
       process.exitCode = outcome.signal === "SIGINT" ? 130 : 143;
@@ -1396,6 +1400,7 @@ async function runForegroundReviewCommand(cwd, job, request, options = {}) {
     }
     snapshot = outcome.snapshot;
   } finally {
+    waitController.abort();
     process.removeListener("SIGINT", onSigint);
     process.removeListener("SIGTERM", onSigterm);
   }
@@ -1501,10 +1506,11 @@ async function waitForSingleJobSnapshot(cwd, reference, options = {}) {
   const deadline = Date.now() + timeoutMs;
   let snapshot = buildSingleJobSnapshot(cwd, reference);
 
-  while (isActiveJobStatus(snapshot.job.status) && Date.now() < deadline) {
+  while (!options.signal?.aborted && isActiveJobStatus(snapshot.job.status) && Date.now() < deadline) {
     await sleep(
       Math.min(pollIntervalMs, Math.max(0, deadline - Date.now()))
     );
+    if (options.signal?.aborted) break;
     snapshot = buildSingleJobSnapshot(cwd, reference);
   }
 
@@ -2079,23 +2085,32 @@ function handleReserveJob(argv, prefix) {
 }
 
 async function cancelTrackedJob(workspaceRoot, job, errorMessage) {
-  const existing = readStoredJob(workspaceRoot, job.id) ?? {};
-  const transition = transitionJob(
-    workspaceRoot,
-    job.id,
-    ["running", "queued"],
-    "cancelling"
-  );
+  const transition = beginJobCancellation(workspaceRoot, job.id);
   if (!transition.transitioned) {
     const status = transition.job?.status ?? job.status;
+    // The caller lost the `cancelling` CAS: another actor owns the job now. While
+    // the stored job is still active, its recorded process may still be running,
+    // so the report must warn. Terminal winners clear the process fields.
+    const attempted = transition.job?.pgid ?? transition.job?.pid ?? null;
+    const mayStillRun = Boolean(attempted) && isActiveJobStatus(status);
+    const cancelResult = mayStillRun
+      ? { cancelled: false, note: "Cancellation transition lost while the job was still active." }
+      : null;
     return {
       job: { ...job, status, phase: status },
-      payload: { jobId: job.id, status, title: job.title },
+      cancelResult,
+      attempted,
+      payload: {
+        jobId: job.id,
+        status,
+        title: job.title,
+        ...(cancelResult ? { note: cancelResult.note } : {}),
+      },
     };
   }
 
-  const pid = existing.pid ?? job.pid;
-  const pidIdentity = existing.pidIdentity ?? null;
+  const pid = transition.job.pid;
+  const pidIdentity = transition.job.pidIdentity ?? null;
   /** @type {{ cancelled: boolean, note?: string }} */
   let cancelResult = { cancelled: true, note: "No PID to cancel" };
   const jobLogFile = resolveJobLogFile(workspaceRoot, job.id);
@@ -2117,15 +2132,16 @@ async function cancelTrackedJob(workspaceRoot, job, errorMessage) {
 
   const completedAt = nowIso();
   const status = cancelResult.cancelled ? "cancelled" : "cancel_failed";
+  let finalTransition;
   if (status === "cancelled") {
-    transitionJob(workspaceRoot, job.id, ["cancelling"], "cancelled", {
+    finalTransition = transitionJob(workspaceRoot, job.id, ["cancelling"], "cancelled", {
       completedAt,
       errorMessage,
       pid: null,
       pidIdentity: null,
     });
   } else {
-    transitionJob(workspaceRoot, job.id, ["cancelling"], "cancel_failed", {
+    finalTransition = transitionJob(workspaceRoot, job.id, ["cancelling"], "cancel_failed", {
       completedAt,
       errorMessage: `Cancel failed: ${cancelResult.note ?? "process group still alive"}`,
       note: cancelResult.note ?? null,
@@ -2133,15 +2149,21 @@ async function cancelTrackedJob(workspaceRoot, job, errorMessage) {
     });
   }
 
-  appendLogLine(jobLogFile, `Cancel result: ${status}`);
+  const finalJob = finalTransition.job;
+  const note = finalTransition.transitioned
+    ? cancelResult.note
+    : `Job state changed to ${finalJob.status} while cancellation was in progress.`;
+  appendLogLine(jobLogFile, `Cancel result: ${finalJob.status}`);
   cleanupOldJobs(workspaceRoot);
   return {
-    job: { ...job, status, phase: status },
+    job: finalJob,
+    cancelResult,
+    attempted: pid && Number.isFinite(pid) ? pid : null,
     payload: {
       jobId: job.id,
-      status,
-      title: job.title,
-      note: cancelResult.note,
+      status: finalJob.status,
+      title: finalJob.title,
+      note,
     },
   };
 }
@@ -2162,7 +2184,7 @@ async function handleCancel(argv) {
   );
   outputCommandResult(
     cancellation.payload,
-    renderCancelReport(cancellation.job),
+    renderCancelReport(cancellation.job, cancellation.cancelResult, cancellation.attempted),
     options.json
   );
 }

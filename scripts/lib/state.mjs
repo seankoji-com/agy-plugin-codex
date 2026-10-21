@@ -456,14 +456,36 @@ function isWithinReapGracePeriod(job, now = Date.now()) {
   return Number.isFinite(timestamp) && now - timestamp < REAP_GRACE_MS;
 }
 
+export function cancellationOwnerState(job, options = {}) {
+  if (!Number.isInteger(job.cancelOwnerPid) || job.cancelOwnerPid <= 0 ||
+      typeof job.cancelOwnerIdentity !== "string" || !job.cancelOwnerIdentity) {
+    return "gone";
+  }
+  const identityImpl = options.identityImpl ?? getProcessIdentity;
+  const killImpl = options.killImpl ?? process.kill.bind(process);
+  try {
+    return identityImpl(job.cancelOwnerPid) === job.cancelOwnerIdentity ? "live" : "gone";
+  } catch {
+    // A bare live PID cannot establish identity. Retain uncertain ownership,
+    // but an ESRCH probe still permits abandoned-job recovery.
+    try {
+      killImpl(job.cancelOwnerPid, 0);
+    } catch (error) {
+      if (error?.code === "ESRCH") return "gone";
+    }
+    return "unknown";
+  }
+}
+
 /**
  * Detect zombie jobs whose PID has died and auto-transition them to "failed".
  * Called from listJobs() so every job-reading path benefits automatically.
  */
-export function reapStaleJobs(cwd, jobs) {
+export function reapStaleJobs(cwd, jobs, options = {}) {
   return jobs.map((job) => {
     if (!REAPABLE_STATUSES.has(job.status) || !job.pid) return job;
     if (isWithinReapGracePeriod(job)) return job;
+    if (job.status === "cancelling" && cancellationOwnerState(job, options) !== "gone") return job;
 
     // Use pidIdentity if available (PID-reuse safe), otherwise fall back to isProcessAlive
     const alive = job.pidIdentity
@@ -671,6 +693,27 @@ export function casJobStatus(cwd, jobId, expected, next, extra = {}) {
 }
 
 export function transitionJob(cwd, jobId, expectedStatuses, next, extra = {}) {
+  return transitionJobWithPatch(cwd, jobId, expectedStatuses, next, () => extra);
+}
+
+export function beginJobCancellation(cwd, jobId, options = {}) {
+  return transitionJobWithPatch(cwd, jobId, ["running", "queued"], "cancelling", (job) => {
+    // A no-PID cancellation is synchronous. Capture ownership whenever a
+    // process is recorded, even if the target identity was unavailable at
+    // spawn time, so the reaper cannot fail a job another actor is cancelling.
+    if (!Number.isFinite(job.pid) || !job.pid) return {};
+    let identity;
+    try {
+      identity = (options.identityImpl ?? getProcessIdentity)(process.pid);
+    } catch {}
+    if (typeof identity !== "string" || !identity) {
+      throw new Error(`Cannot safely cancel ${jobId}: cancelling process identity is unavailable. Job remains active; check $agy:status ${jobId}.`);
+    }
+    return { cancelOwnerPid: process.pid, cancelOwnerIdentity: identity };
+  });
+}
+
+function transitionJobWithPatch(cwd, jobId, expectedStatuses, next, patchForJob) {
   const jobFile = resolveJobFile(cwd, jobId);
   const lockFile = jobFile + ".lock";
   const expectedList = Array.isArray(expectedStatuses)
@@ -691,9 +734,13 @@ export function transitionJob(cwd, jobId, expectedStatuses, next, extra = {}) {
     const updatedJob = {
       ...job,
       status: next,
-      ...extra,
+      ...patchForJob(job),
       updatedAt: nowIso(),
     };
+    if (next !== "cancelling") {
+      delete updatedJob.cancelOwnerPid;
+      delete updatedJob.cancelOwnerIdentity;
+    }
     writeAtomic(jobFile, updatedJob);
     return {
       transitioned: true,

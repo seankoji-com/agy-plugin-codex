@@ -400,11 +400,33 @@ export function renderStoredJobResult(job, storedJob) {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
-export function renderCancelReport(job) {
-  const lines = ["# Antigravity Cancel", "", `Cancelled ${job.id}.`, ""];
+/**
+ * @param {*} job The committed job record.
+ * @param {{ cancelled: boolean, note?: string } | null} [cancelResult] This caller's cancel outcome.
+ * @param {number | null} [attemptedPid] The PID this caller targeted; used for the
+ *   cleanup hint only when `cancelResult.cancelled === false`.
+ */
+export function renderCancelReport(job, cancelResult = null, attemptedPid = null) {
+  const outcome = job.status === "cancel_failed"
+    ? `Could not cancel ${job.id}.`
+    : job.status && job.status !== "cancelled"
+      ? `Job ${job.id} is ${job.status}.`
+      : `Cancelled ${job.id}.`;
+  const lines = ["# Antigravity Cancel", "", outcome, ""];
   if (job.title) lines.push(`- Title: ${job.title}`);
   if (job.summary) lines.push(`- Summary: ${job.summary}`);
-  if (job.status === "cancel_failed") lines.push(`- Warning: Process group may still be alive. Manual cleanup: kill -9 -${job.pgid ?? job.pid}`);
+  // A lost `cancel_failed` transition leaves the job in another status, so the
+  // recorded cancel outcome must also be considered before dropping the warning
+  // about a process group that may still be alive.
+  const cancelIncomplete =
+    job.status === "cancel_failed" || cancelResult?.cancelled === false;
+  // The winning transition (e.g. `completed`) clears pid/pgid from the stored job,
+  // so fall back to the process this cancel attempt targeted but did not stop.
+  const cleanupTarget =
+    job.pgid ?? job.pid ?? (cancelResult?.cancelled === false ? attemptedPid : null);
+  if (cancelIncomplete && cleanupTarget) {
+    lines.push(`- Warning: Process group may still be alive. Manual cleanup: kill -9 -${cleanupTarget}`);
+  }
   lines.push("- Check `$agy:status` for the updated queue.");
   return `${lines.join("\n").trimEnd()}\n`;
 }

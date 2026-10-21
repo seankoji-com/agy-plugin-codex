@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Show queued reviews and tasks in the status overview so pending work remains discoverable. Remove the job-control test suite's owned temporary directory after it finishes.
+- Keep an in-progress cancellation owned by its cancelling process so status reads cannot reap it after the target exits. Recover dead or reused owners, clear ownership after the transition, and refuse a process cancellation when the cancelling actor's identity cannot be established.
+- Stop the foreground status wait on interruption, including when cancellation is refused; keep the recorded job available for recovery.
+- Report the stored job outcome when a concurrent state update wins during cancellation, and avoid claiming successful cancellation for failed or other job states.
 - Preserve literal backslashes inside single-quoted raw companion arguments so Windows paths and POSIX paths containing backslashes select the intended workspace.
 - Resolve the workspace root to its canonical Windows spelling so an 8.3 short-name `--cwd` (for example `RUNNER~1`) and its long-name form route to the same workspace and share one plugin state directory.
 
