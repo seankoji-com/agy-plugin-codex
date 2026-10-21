@@ -89,4 +89,4 @@ jobs:
         with:
           node-version: 18
       # These stdlib tests need no development dependencies (which require Node 24).
-      - run: node --test tests/test-isolation.test.mjs tests/marketplace-workflow.test.mjs tests/cancellation-ownership.test.mjs
+      - run: node --test tests/job-queued-status.test.mjs tests/test-isolation.test.mjs tests/marketplace-workflow.test.mjs tests/cancellation-ownership.test.mjs
